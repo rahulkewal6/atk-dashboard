@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/deepakkewal/Desktop/)",
+      "Bash(pip3 --version)",
+      "Bash(pip3 install *)",
+      "Bash(ls /Users/deepakkewal/Downloads/*.json 2>/dev/null | head -5)",
+      "Bash(/Users/deepakkewal/Library/Python/3.9/bin/streamlit run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8501)",
+      "Bash(open http://localhost:8501)",
+      "Bash(curl -s -X GET https://api.apollo.io/api/v1/emailer_campaigns -H 'Content-Type: application/json' -H 'X-Api-Key: ozhMwoUl545BD38hoyBPuA')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST https://api.apollo.io/v1/emailer_campaigns/search -H 'Content-Type: application/json' -H 'X-Api-Key: ozhMwoUl545BD38hoyBPuA' -d '{\"per_page\": 25}')",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -X GET https://api.apollo.io/v1/emailer_campaigns/699f1453e40ce10019fda262 -H 'Content-Type: application/json' -H 'X-Api-Key: ozhMwoUl545BD38hoyBPuA')",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
