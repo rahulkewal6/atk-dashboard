@@ -1,5 +1,11 @@
 # NEVER upload these to GitHub
 .streamlit/secrets.toml
+.claude/
+
+# Internal docs — keep local only
+SETUP.md
+RULES.md
+STRATEGY.md
 
 # Python
 __pycache__/
