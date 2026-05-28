@@ -165,39 +165,97 @@ def add_calendar_event(data: dict):
         return False
 
 
-# ── EXHIBITOR DATABASE ──────────────────────────────────────────────────────
+# ── EXHIBITOR DATABASE — PER-EVENT TABS ────────────────────────────────────
+# Each uploaded list lives in its own worksheet named  "EX — {event_name}"
+# so the "Open in Google Sheets" link can point directly to that tab's GID.
 
-def _get_exhibitor_ws():
-    """Return the Exhibitor Lists worksheet, creating it if it doesn't exist."""
+_EX_PREFIX = "EX — "
+
+
+def _event_tab_name(event_name: str) -> str:
+    """Canonical worksheet title for an event."""
+    return f"{_EX_PREFIX}{event_name}"
+
+
+def _get_or_create_event_ws(event_name: str):
+    """Return (or create) the dedicated worksheet for an event."""
     sheet = get_sheet()
     if not sheet:
         return None
+    tab_name = _event_tab_name(event_name)
     try:
-        return sheet.worksheet("Exhibitor Lists")
+        return sheet.worksheet(tab_name)
     except gspread.exceptions.WorksheetNotFound:
         try:
-            ws = sheet.add_worksheet(title="Exhibitor Lists", rows=5000, cols=len(EXHIBITOR_HEADERS))
+            ws = sheet.add_worksheet(title=tab_name, rows=5000, cols=len(EXHIBITOR_HEADERS))
             ws.append_row(EXHIBITOR_HEADERS)
             return ws
         except Exception:
             return None
 
 
+def get_all_exhibitor_events() -> list:
+    """Return a list of dicts {name, gid} for every EX— tab in the spreadsheet."""
+    sheet = get_sheet()
+    if not sheet:
+        return []
+    try:
+        result = []
+        for ws in sheet.worksheets():
+            if ws.title.startswith(_EX_PREFIX):
+                event_name = ws.title[len(_EX_PREFIX):]
+                result.append({"name": event_name, "gid": ws.id})
+        return result
+    except Exception:
+        return []
+
+
 @st.cache_data(ttl=60)
-def get_exhibitor_df() -> pd.DataFrame:
-    ws = _get_exhibitor_ws()
-    if not ws:
+def get_exhibitor_df(event_name: str | None = None) -> pd.DataFrame:
+    """Return exhibitor data for a specific event, or all events combined."""
+    sheet = get_sheet()
+    if not sheet:
         return pd.DataFrame()
     try:
-        data = ws.get_all_records()
-        return pd.DataFrame(data) if data else pd.DataFrame()
+        worksheets = sheet.worksheets()
+        ex_tabs = [ws for ws in worksheets if ws.title.startswith(_EX_PREFIX)]
+        if event_name:
+            tab_name = _event_tab_name(event_name)
+            ex_tabs = [ws for ws in ex_tabs if ws.title == tab_name]
+
+        frames = []
+        for ws in ex_tabs:
+            data = ws.get_all_records()
+            if data:
+                df = pd.DataFrame(data)
+                # Ensure Event Name column is populated (older rows may lack it)
+                ev = ws.title[len(_EX_PREFIX):]
+                if "Event Name" not in df.columns:
+                    df.insert(0, "Event Name", ev)
+                else:
+                    df["Event Name"] = df["Event Name"].replace("", ev)
+                frames.append(df)
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     except Exception:
         return pd.DataFrame()
 
 
-def add_exhibitor_rows(rows: list) -> bool:
-    """Append a list of exhibitor dicts to the Exhibitor Lists sheet."""
-    ws = _get_exhibitor_ws()
+def get_event_sheet_url(event_name: str) -> str:
+    """Return a direct Google Sheets URL for the event's tab (using its GID)."""
+    sheet = get_sheet()
+    if not sheet:
+        return ""
+    try:
+        sheet_id = st.secrets.get("GOOGLE_SHEET_ID", "")
+        ws = sheet.worksheet(_event_tab_name(event_name))
+        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid={ws.id}"
+    except Exception:
+        return ""
+
+
+def add_exhibitor_rows(rows: list, event_name: str) -> bool:
+    """Append a list of exhibitor dicts to the event's dedicated worksheet."""
+    ws = _get_or_create_event_ws(event_name)
     if not ws:
         return False
     try:
@@ -205,7 +263,7 @@ def add_exhibitor_rows(rows: list) -> bool:
         batch = []
         for r in rows:
             batch.append([
-                r.get("Event Name", ""),
+                r.get("Event Name", event_name),
                 r.get("Event Date", ""),
                 r.get("Company Name", ""),
                 r.get("Stand Number", ""),
@@ -229,8 +287,8 @@ def add_exhibitor_rows(rows: list) -> bool:
 
 
 def update_call_status(event_name: str, company_name: str, status: str, called_by: str, notes: str) -> bool:
-    """Update call status for a specific company in the Exhibitor Lists sheet."""
-    ws = _get_exhibitor_ws()
+    """Update call status for a specific company in the event's worksheet."""
+    ws = _get_or_create_event_ws(event_name)
     if not ws:
         return False
     try:
@@ -239,17 +297,14 @@ def update_call_status(event_name: str, company_name: str, status: str, called_b
             return False
         headers = data[0]
         try:
-            event_col   = headers.index("Event Name")
             company_col = headers.index("Company Name")
             status_col  = headers.index("Call Status")
             by_col      = headers.index("Called By")
             notes_col   = headers.index("Call Notes")
         except ValueError:
             return False
-        for i, row in enumerate(data[1:], start=2):  # 1-indexed, skip header
-            if (len(row) > max(event_col, company_col) and
-                    row[event_col] == event_name and
-                    row[company_col] == company_name):
+        for i, row in enumerate(data[1:], start=2):  # row 2 onward (1-indexed)
+            if len(row) > company_col and row[company_col] == company_name:
                 ws.update_cell(i, status_col + 1, status)
                 ws.update_cell(i, by_col + 1, called_by)
                 ws.update_cell(i, notes_col + 1, notes)
@@ -261,27 +316,16 @@ def update_call_status(event_name: str, company_name: str, status: str, called_b
 
 
 def delete_event_exhibitors(event_name: str) -> bool:
-    """Delete all rows for a given event from the Exhibitor Lists sheet."""
-    ws = _get_exhibitor_ws()
-    if not ws:
+    """Delete the entire worksheet for an event."""
+    sheet = get_sheet()
+    if not sheet:
         return False
     try:
-        data = ws.get_all_values()
-        if not data:
-            return True
-        headers = data[0]
-        try:
-            event_col = headers.index("Event Name")
-        except ValueError:
-            return False
-        rows_to_delete = [
-            i + 1
-            for i, row in enumerate(data[1:], start=1)
-            if len(row) > event_col and row[event_col] == event_name
-        ]
-        for row_idx in reversed(rows_to_delete):
-            ws.delete_rows(row_idx + 1)
+        ws = sheet.worksheet(_event_tab_name(event_name))
+        sheet.del_worksheet(ws)
         get_exhibitor_df.clear()
         return True
+    except gspread.exceptions.WorksheetNotFound:
+        return True  # Already gone — treat as success
     except Exception:
         return False

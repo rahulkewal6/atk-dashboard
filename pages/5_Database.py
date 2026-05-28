@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import date
-from utils.sheets import get_exhibitor_df, add_exhibitor_rows, delete_event_exhibitors, update_call_status
+from utils.sheets import (
+    get_exhibitor_df, add_exhibitor_rows, delete_event_exhibitors,
+    update_call_status, get_all_exhibitor_events, get_event_sheet_url,
+)
 from utils.constants import EXHIBITIONS, USERS, CALL_STATUSES
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
@@ -21,14 +24,8 @@ if "db_viewing" not in st.session_state:
     st.session_state.db_viewing = None
 
 # ── LOAD DATA ─────────────────────────────────────────────────────────────────
-df_all = get_exhibitor_df()
-
-# ── GOOGLE SHEETS LINK ────────────────────────────────────────────────────────
-try:
-    sheet_id = st.secrets.get("GOOGLE_SHEET_ID", "")
-    sheets_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
-except Exception:
-    sheets_url = ""
+df_all = get_exhibitor_df()          # combined view of all EX— tabs
+all_events = get_all_exhibitor_events()  # [{name, gid}, …]
 
 # ── SUMMARY METRICS ───────────────────────────────────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
@@ -117,7 +114,7 @@ with st.expander("⬆️ Upload New List"):
                         row[field] = str(r[src_col]) if src_col != "— skip —" and src_col in r else ""
                     rows.append(row)
                 with st.spinner(f"Uploading {len(rows)} contacts…"):
-                    ok = add_exhibitor_rows(rows)
+                    ok = add_exhibitor_rows(rows, event_label)
                 if ok:
                     st.success(f"✅ {len(rows)} contacts uploaded for **{event_label}**")
                     st.rerun()
@@ -130,16 +127,17 @@ st.markdown("---")
 if st.session_state.db_viewing:
     selected = st.session_state.db_viewing
 
-    # Back button + Google Sheets link
+    # Back button + Google Sheets link (direct tab GID)
+    event_tab_url = get_event_sheet_url(selected)
     hcol1, hcol2 = st.columns([1, 3])
     with hcol1:
         if st.button("← Back to all lists"):
             st.session_state.db_viewing = None
             st.rerun()
     with hcol2:
-        if sheets_url:
+        if event_tab_url:
             st.markdown(
-                f"<a href='{sheets_url}' target='_blank' style='color:#FF6600; font-weight:600;'>"
+                f"<a href='{event_tab_url}' target='_blank' style='color:#FF6600; font-weight:600;'>"
                 f"📊 Open in Google Sheets → update call status directly there</a>",
                 unsafe_allow_html=True,
             )
@@ -246,8 +244,8 @@ if st.session_state.db_viewing:
         st.download_button("⬇️ Download Excel", data=buf.getvalue(), file_name=f"{safe_name}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     with dl3:
-        if sheets_url:
-            st.link_button("📊 Open Google Sheets", sheets_url, use_container_width=True)
+        if event_tab_url:
+            st.link_button("📊 Open Google Sheets", event_tab_url, use_container_width=True)
 
     if is_admin():
         st.markdown("---")
@@ -270,24 +268,19 @@ if st.session_state.db_viewing:
 # ── LIBRARY VIEW ──────────────────────────────────────────────────────────────
 st.subheader("All Lists")
 
-if df_all.empty:
+if df_all.empty and not all_events:
     st.info("No lists uploaded yet. Use the upload section above.")
     st.stop()
 
-# Google Sheets quick link at top of library
-if sheets_url:
-    st.markdown(
-        f"<a href='{sheets_url}' target='_blank' style='color:#FF6600; font-weight:600;'>"
-        f"📊 Open full database in Google Sheets</a>  "
-        f"<span style='color:#888; font-size:0.85rem;'>— update call status directly, reflects here in 60 sec</span>",
-        unsafe_allow_html=True,
-    )
-
 st.markdown("")
 
+# Build a GID lookup from the live spreadsheet tab list
+gid_map = {ev["name"]: ev["gid"] for ev in all_events}
+sheet_id_val = st.secrets.get("GOOGLE_SHEET_ID", "")
+
 summary_rows = []
-for event in sorted(df_all["Event Name"].dropna().unique()):
-    edf = df_all[df_all["Event Name"] == event]
+for event in sorted(df_all["Event Name"].dropna().unique()) if not df_all.empty else [ev["name"] for ev in all_events]:
+    edf = df_all[df_all["Event Name"] == event] if not df_all.empty else pd.DataFrame()
     count      = len(edf)
     ev_date    = edf["Event Date"].replace("", float("nan")).dropna().iloc[0] if "Event Date" in edf.columns and not edf["Event Date"].replace("", float("nan")).dropna().empty else "—"
     uploader   = edf["Uploaded By"].dropna().iloc[-1] if "Uploaded By" in edf.columns and not edf.empty else "—"
@@ -297,6 +290,8 @@ for event in sorted(df_all["Event Name"].dropna().unique()):
     else:
         called_n = 0
         pct_done = "0%"
+    gid = gid_map.get(event, "")
+    tab_url = f"https://docs.google.com/spreadsheets/d/{sheet_id_val}/edit#gid={gid}" if gid and sheet_id_val else ""
     summary_rows.append({
         "List Name":    event,
         "Event Date":   ev_date,
@@ -305,9 +300,11 @@ for event in sorted(df_all["Event Name"].dropna().unique()):
         "Pending":      count - called_n,
         "Progress":     pct_done,
         "Uploaded By":  uploader,
+        "_tab_url":     tab_url,
     })
 
-st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+display_summary = [{k: v for k, v in r.items() if k != "_tab_url"} for r in summary_rows]
+st.dataframe(pd.DataFrame(display_summary), use_container_width=True, hide_index=True)
 
 st.markdown("**Click a list to open it:**")
 btn_cols = st.columns(min(len(summary_rows), 4))
@@ -317,3 +314,9 @@ for i, row in enumerate(summary_rows):
         if st.button(label, use_container_width=True, key=f"open_{i}"):
             st.session_state.db_viewing = row["List Name"]
             st.rerun()
+        if row["_tab_url"]:
+            st.markdown(
+                f"<a href='{row['_tab_url']}' target='_blank' "
+                f"style='font-size:0.75rem; color:#FF6600;'>📊 Google Sheets</a>",
+                unsafe_allow_html=True,
+            )
