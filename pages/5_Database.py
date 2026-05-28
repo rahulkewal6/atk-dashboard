@@ -112,7 +112,7 @@ with st.expander("⬆️ Upload New List"):
                         row[field] = str(r[src_col]) if src_col != "— skip —" and src_col in r else ""
                     rows.append(row)
                 with st.spinner(f"Creating Google Sheet and uploading {len(rows)} contacts…"):
-                    ok = add_exhibitor_rows(rows, event_label)
+                    ok, err_msg = add_exhibitor_rows(rows, event_label)
                 if ok:
                     sheet_url = get_event_sheet_url(event_label)
                     st.success(f"✅ {len(rows)} contacts uploaded for **{event_label}**")
@@ -124,7 +124,7 @@ with st.expander("⬆️ Upload New List"):
                         )
                     st.rerun()
                 else:
-                    st.error("Upload failed. Check Google Sheets connection.")
+                    st.error(f"Upload failed: {err_msg}")
 
 st.markdown("---")
 

@@ -262,7 +262,8 @@ def _get_or_create_event_spreadsheet(event_name: str, event_date: str = "",
                                       uploaded_by: str = ""):
     """
     Get (or create) the dedicated standalone Google Spreadsheet for an event.
-    New spreadsheets are shared with anyone who has the link (writer access).
+    Uses the Sheets API for creation (no Drive API needed).
+    Attempts to share with anyone-with-link, but continues if that fails.
     Returns the gspread.Spreadsheet object, or None on failure.
     """
     client = get_client()
@@ -278,17 +279,29 @@ def _get_or_create_event_spreadsheet(event_name: str, event_date: str = "",
             except Exception:
                 pass  # Fall through — recreate if missing
 
-    # Create a fresh spreadsheet
+    # ── Create via Sheets API (avoids Drive API dependency) ──
     try:
         title = f"ATK — {event_name} Exhibitors"
-        ss = client.create(title)
-        # Share: anyone with the link can edit
+        r = client.request(
+            "post",
+            "https://sheets.googleapis.com/v4/spreadsheets",
+            json={"properties": {"title": title}},
+        )
+        ss = gspread.Spreadsheet(client, r.json())
+    except Exception:
+        return None
+
+    # ── Share: anyone with the link can edit (requires Drive API — non-fatal) ──
+    try:
         ss.share(None, perm_type="anyone", role="writer", notify=False)
-        # Add headers to sheet1
+    except Exception:
+        pass  # Upload still works; sharing can be enabled later via Drive API
+
+    # ── Set up header row ──
+    try:
         ws = ss.sheet1
         ws.update_title("Exhibitors")
         ws.append_row(EXHIBITOR_HEADERS)
-        # Record in registry (count starts at 0; add_exhibitor_rows updates it)
         _register_event(event_name, ss.id, event_date, 0, uploaded_by)
         return ss
     except Exception:
@@ -374,32 +387,35 @@ def get_exhibitor_df(event_name: str = None) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def add_exhibitor_rows(rows: list, event_name: str) -> bool:
-    """Upload rows to the event's own spreadsheet; create it if it doesn't exist."""
+def add_exhibitor_rows(rows: list, event_name: str):
+    """
+    Upload rows to the event's own spreadsheet; create it if needed.
+    Returns (True, "") on success, or (False, error_message) on failure.
+    """
     event_date  = rows[0].get("Event Date", "")  if rows else ""
     uploaded_by = rows[0].get("Uploaded By", "") if rows else ""
 
     ss = _get_or_create_event_spreadsheet(event_name, event_date, uploaded_by)
     if not ss:
-        return False
+        return False, "Could not create or open the Google Sheet. Check that the Sheets API is enabled for your service account."
     try:
         ws = ss.sheet1
         today = datetime.now().strftime("%d-%b-%Y")
         batch = [[
-            r.get("Event Name",    event_name),
-            r.get("Event Date",    ""),
-            r.get("Company Name",  ""),
-            r.get("Stand Number",  ""),
+            r.get("Event Name",     event_name),
+            r.get("Event Date",     ""),
+            r.get("Company Name",   ""),
+            r.get("Stand Number",   ""),
             r.get("Hall / Pavilion",""),
-            r.get("Country",       ""),
-            r.get("Website",       ""),
-            r.get("Email",         ""),
-            r.get("Phone",         ""),
-            r.get("Contact Name",  ""),
-            r.get("Call Status",   "Not Called"),
-            r.get("Called By",     ""),
-            r.get("Call Notes",    ""),
-            r.get("Uploaded By",   ""),
+            r.get("Country",        ""),
+            r.get("Website",        ""),
+            r.get("Email",          ""),
+            r.get("Phone",          ""),
+            r.get("Contact Name",   ""),
+            r.get("Call Status",    "Not Called"),
+            r.get("Called By",      ""),
+            r.get("Call Notes",     ""),
+            r.get("Uploaded By",    ""),
             today,
         ] for r in rows]
         ws.append_rows(batch, value_input_option="RAW")
@@ -409,9 +425,9 @@ def add_exhibitor_rows(rows: list, event_name: str) -> bool:
         called = sum(1 for d in all_data if str(d.get("Call Status", "")) != "Not Called")
         _update_registry_counts(event_name, total, called)
         get_exhibitor_df.clear()
-        return True
-    except Exception:
-        return False
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 def update_call_status(event_name: str, company_name: str, status: str,
