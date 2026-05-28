@@ -199,9 +199,8 @@ def _get_db_registry_ws():
             return None
 
 
-@st.cache_data(ttl=60)
 def _get_registry_records() -> list:
-    """Cached read of all DB Registry rows."""
+    """Read all DB Registry rows — fast (small table, no caching needed here)."""
     ws = _get_db_registry_ws()
     if not ws:
         return []
@@ -218,7 +217,7 @@ def _get_registry_map() -> dict:
 
 def _register_event(event_name: str, ss_id: str, event_date: str,
                     total: int, uploaded_by: str):
-    """Add a new row to the DB Registry."""
+    """Add a new row to the DB Registry and clear public caches."""
     ws = _get_db_registry_ws()
     if not ws:
         return
@@ -227,7 +226,8 @@ def _register_event(event_name: str, ss_id: str, event_date: str,
             event_name, ss_id, event_date, total, 0,
             uploaded_by, datetime.now().strftime("%d-%b-%Y"),
         ])
-        _get_registry_records.clear()
+        get_all_exhibitor_events.clear()
+        get_exhibitor_df.clear()
     except Exception:
         pass
 
@@ -250,7 +250,7 @@ def _update_registry_counts(event_name: str, total: int, called: int):
             if len(row) > name_col and row[name_col] == event_name:
                 ws.update_cell(i, total_col  + 1, total)
                 ws.update_cell(i, called_col + 1, called)
-                _get_registry_records.clear()
+                get_all_exhibitor_events.clear()
                 return
     except Exception:
         pass
@@ -312,9 +312,10 @@ def _get_event_ws(event_name: str):
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=60)
 def get_all_exhibitor_events() -> list:
     """
-    Return summary list for all registered events — fast (1 API call to registry).
+    Return summary list for all registered events — cached 60s.
     Each dict: {name, spreadsheet_id, url, event_date, total, called, uploaded_by}
     """
     result = []
@@ -477,6 +478,6 @@ def delete_event_exhibitors(event_name: str) -> bool:
         except Exception:
             pass
 
-    _get_registry_records.clear()
+    get_all_exhibitor_events.clear()
     get_exhibitor_df.clear()
     return True
