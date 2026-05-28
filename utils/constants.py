@@ -91,6 +91,12 @@ PIPELINE_HEADERS = [
 
 HISTORY_HEADERS = ["Company Name", "Stage", "Updated By", "Date/Time", "Notes"]
 
+EXHIBITOR_HEADERS = [
+    "Event Name", "Company Name", "Stand Number", "Hall / Pavilion",
+    "Country", "Website", "Email", "Phone", "Contact Name",
+    "Uploaded By", "Upload Date",
+]
+
 CALENDAR_HEADERS = [
     "Event Name", "Venue", "City", "Start Date", "End Date",
     "Exhibitor Count", "Official URL", "Verification Status",

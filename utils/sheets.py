@@ -3,6 +3,7 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
 from datetime import datetime
+from utils.constants import EXHIBITOR_HEADERS
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -159,6 +160,92 @@ def add_calendar_event(data: dict):
             data.get("exhibitor_priority", ""),
             data.get("notes", ""),
         ])
+        return True
+    except Exception:
+        return False
+
+
+# ── EXHIBITOR DATABASE ──────────────────────────────────────────────────────
+
+def _get_exhibitor_ws():
+    """Return the Exhibitor Lists worksheet, creating it if it doesn't exist."""
+    sheet = get_sheet()
+    if not sheet:
+        return None
+    try:
+        return sheet.worksheet("Exhibitor Lists")
+    except gspread.exceptions.WorksheetNotFound:
+        try:
+            ws = sheet.add_worksheet(title="Exhibitor Lists", rows=5000, cols=len(EXHIBITOR_HEADERS))
+            ws.append_row(EXHIBITOR_HEADERS)
+            return ws
+        except Exception:
+            return None
+
+
+@st.cache_data(ttl=60)
+def get_exhibitor_df() -> pd.DataFrame:
+    ws = _get_exhibitor_ws()
+    if not ws:
+        return pd.DataFrame()
+    try:
+        data = ws.get_all_records()
+        return pd.DataFrame(data) if data else pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+
+def add_exhibitor_rows(rows: list) -> bool:
+    """Append a list of exhibitor dicts to the Exhibitor Lists sheet."""
+    ws = _get_exhibitor_ws()
+    if not ws:
+        return False
+    try:
+        today = datetime.now().strftime("%d-%b-%Y")
+        batch = []
+        for r in rows:
+            batch.append([
+                r.get("Event Name", ""),
+                r.get("Company Name", ""),
+                r.get("Stand Number", ""),
+                r.get("Hall / Pavilion", ""),
+                r.get("Country", ""),
+                r.get("Website", ""),
+                r.get("Email", ""),
+                r.get("Phone", ""),
+                r.get("Contact Name", ""),
+                r.get("Uploaded By", ""),
+                today,
+            ])
+        ws.append_rows(batch, value_input_option="RAW")
+        get_exhibitor_df.clear()
+        return True
+    except Exception:
+        return False
+
+
+def delete_event_exhibitors(event_name: str) -> bool:
+    """Delete all rows for a given event from the Exhibitor Lists sheet."""
+    ws = _get_exhibitor_ws()
+    if not ws:
+        return False
+    try:
+        data = ws.get_all_values()
+        if not data:
+            return True
+        headers = data[0]
+        try:
+            event_col = headers.index("Event Name")
+        except ValueError:
+            return False
+        rows_to_delete = [
+            i + 1
+            for i, row in enumerate(data[1:], start=1)
+            if len(row) > event_col and row[event_col] == event_name
+        ]
+        for row_idx in reversed(rows_to_delete):
+            ws.delete_rows(row_idx + 1)
+        get_exhibitor_df.clear()
         return True
     except Exception:
         return False
