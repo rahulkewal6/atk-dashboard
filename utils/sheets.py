@@ -165,130 +165,258 @@ def add_calendar_event(data: dict):
         return False
 
 
-# ── EXHIBITOR DATABASE — PER-EVENT TABS ────────────────────────────────────
-# Each uploaded list lives in its own worksheet named  "EX — {event_name}"
-# so the "Open in Google Sheets" link can point directly to that tab's GID.
+# ── EXHIBITOR DATABASE — SEPARATE SPREADSHEETS PER EVENT ────────────────────
+#
+# Architecture:
+#   • Each uploaded list creates its own standalone Google Spreadsheet named
+#     "ATK — {event_name} Exhibitors", shared with anyone who has the link.
+#   • A "DB Registry" tab in the main ATK Dashboard spreadsheet stores:
+#       Event Name | Spreadsheet ID | Event Date | Total | Called | Uploaded By | Created Date
+#   • "Open in Google Sheets" opens https://docs.google.com/spreadsheets/d/{event_ss_id}/edit
+#     — ONLY that event's data, completely separate from Pipeline/Calendar/etc.
 
-_EX_PREFIX = "EX — "
+_REGISTRY_HEADERS = [
+    "Event Name", "Spreadsheet ID", "Event Date",
+    "Total", "Called", "Uploaded By", "Created Date",
+]
 
 
-def _event_tab_name(event_name: str) -> str:
-    """Canonical worksheet title for an event."""
-    return f"{_EX_PREFIX}{event_name}"
+# ── Registry helpers ─────────────────────────────────────────────────────────
 
-
-def _get_or_create_event_ws(event_name: str):
-    """Return (or create) the dedicated worksheet for an event."""
+def _get_db_registry_ws():
+    """Return the DB Registry worksheet in the main spreadsheet, creating it if needed."""
     sheet = get_sheet()
     if not sheet:
         return None
-    tab_name = _event_tab_name(event_name)
     try:
-        return sheet.worksheet(tab_name)
+        return sheet.worksheet("DB Registry")
     except gspread.exceptions.WorksheetNotFound:
         try:
-            ws = sheet.add_worksheet(title=tab_name, rows=5000, cols=len(EXHIBITOR_HEADERS))
-            ws.append_row(EXHIBITOR_HEADERS)
+            ws = sheet.add_worksheet(title="DB Registry", rows=500, cols=len(_REGISTRY_HEADERS))
+            ws.append_row(_REGISTRY_HEADERS)
             return ws
         except Exception:
             return None
 
 
-def get_all_exhibitor_events() -> list:
-    """Return a list of dicts {name, gid} for every EX— tab in the spreadsheet."""
-    sheet = get_sheet()
-    if not sheet:
-        return []
-    try:
-        result = []
-        for ws in sheet.worksheets():
-            if ws.title.startswith(_EX_PREFIX):
-                event_name = ws.title[len(_EX_PREFIX):]
-                result.append({"name": event_name, "gid": ws.id})
-        return result
-    except Exception:
-        return []
-
-
 @st.cache_data(ttl=60)
-def get_exhibitor_df(event_name: str | None = None) -> pd.DataFrame:
-    """Return exhibitor data for a specific event, or all events combined."""
+def _get_registry_records() -> list:
+    """Cached read of all DB Registry rows."""
+    ws = _get_db_registry_ws()
+    if not ws:
+        return []
+    try:
+        return ws.get_all_records()
+    except Exception:
+        return []
+
+
+def _get_registry_map() -> dict:
+    """Return {event_name: record_dict} from the registry."""
+    return {r["Event Name"]: r for r in _get_registry_records() if r.get("Event Name")}
+
+
+def _register_event(event_name: str, ss_id: str, event_date: str,
+                    total: int, uploaded_by: str):
+    """Add a new row to the DB Registry."""
+    ws = _get_db_registry_ws()
+    if not ws:
+        return
+    try:
+        ws.append_row([
+            event_name, ss_id, event_date, total, 0,
+            uploaded_by, datetime.now().strftime("%d-%b-%Y"),
+        ])
+        _get_registry_records.clear()
+    except Exception:
+        pass
+
+
+def _update_registry_counts(event_name: str, total: int, called: int):
+    """Overwrite Total and Called for an event in the registry."""
     sheet = get_sheet()
     if not sheet:
-        return pd.DataFrame()
+        return
     try:
-        worksheets = sheet.worksheets()
-        ex_tabs = [ws for ws in worksheets if ws.title.startswith(_EX_PREFIX)]
-        if event_name:
-            tab_name = _event_tab_name(event_name)
-            ex_tabs = [ws for ws in ex_tabs if ws.title == tab_name]
-
-        frames = []
-        for ws in ex_tabs:
-            data = ws.get_all_records()
-            if data:
-                df = pd.DataFrame(data)
-                # Ensure Event Name column is populated (older rows may lack it)
-                ev = ws.title[len(_EX_PREFIX):]
-                if "Event Name" not in df.columns:
-                    df.insert(0, "Event Name", ev)
-                else:
-                    df["Event Name"] = df["Event Name"].replace("", ev)
-                frames.append(df)
-        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        ws = sheet.worksheet("DB Registry")
+        data = ws.get_all_values()
+        if not data:
+            return
+        headers = data[0]
+        name_col   = headers.index("Event Name")
+        total_col  = headers.index("Total")
+        called_col = headers.index("Called")
+        for i, row in enumerate(data[1:], start=2):
+            if len(row) > name_col and row[name_col] == event_name:
+                ws.update_cell(i, total_col  + 1, total)
+                ws.update_cell(i, called_col + 1, called)
+                _get_registry_records.clear()
+                return
     except Exception:
-        return pd.DataFrame()
+        pass
+
+
+# ── Per-event spreadsheet helpers ────────────────────────────────────────────
+
+def _get_or_create_event_spreadsheet(event_name: str, event_date: str = "",
+                                      uploaded_by: str = ""):
+    """
+    Get (or create) the dedicated standalone Google Spreadsheet for an event.
+    New spreadsheets are shared with anyone who has the link (writer access).
+    Returns the gspread.Spreadsheet object, or None on failure.
+    """
+    client = get_client()
+    if not client:
+        return None
+
+    reg = _get_registry_map()
+    if event_name in reg:
+        ss_id = reg[event_name].get("Spreadsheet ID", "")
+        if ss_id:
+            try:
+                return client.open_by_key(ss_id)
+            except Exception:
+                pass  # Fall through — recreate if missing
+
+    # Create a fresh spreadsheet
+    try:
+        title = f"ATK — {event_name} Exhibitors"
+        ss = client.create(title)
+        # Share: anyone with the link can edit
+        ss.share(None, perm_type="anyone", role="writer", notify=False)
+        # Add headers to sheet1
+        ws = ss.sheet1
+        ws.update_title("Exhibitors")
+        ws.append_row(EXHIBITOR_HEADERS)
+        # Record in registry (count starts at 0; add_exhibitor_rows updates it)
+        _register_event(event_name, ss.id, event_date, 0, uploaded_by)
+        return ss
+    except Exception:
+        return None
+
+
+def _get_event_ws(event_name: str):
+    """Return sheet1 of the event's spreadsheet, or None."""
+    reg = _get_registry_map()
+    ss_id = reg.get(event_name, {}).get("Spreadsheet ID", "")
+    if not ss_id:
+        return None
+    client = get_client()
+    if not client:
+        return None
+    try:
+        return client.open_by_key(ss_id).sheet1
+    except Exception:
+        return None
+
+
+# ── Public API ───────────────────────────────────────────────────────────────
+
+def get_all_exhibitor_events() -> list:
+    """
+    Return summary list for all registered events — fast (1 API call to registry).
+    Each dict: {name, spreadsheet_id, url, event_date, total, called, uploaded_by}
+    """
+    result = []
+    for r in _get_registry_records():
+        if not r.get("Event Name"):
+            continue
+        ss_id = r.get("Spreadsheet ID", "")
+        result.append({
+            "name":           r["Event Name"],
+            "spreadsheet_id": ss_id,
+            "url":            f"https://docs.google.com/spreadsheets/d/{ss_id}/edit" if ss_id else "",
+            "event_date":     r.get("Event Date") or "—",
+            "total":          int(r.get("Total", 0) or 0),
+            "called":         int(r.get("Called", 0) or 0),
+            "uploaded_by":    r.get("Uploaded By") or "—",
+        })
+    return result
 
 
 def get_event_sheet_url(event_name: str) -> str:
-    """Return a direct Google Sheets URL for the event's tab (using its GID)."""
-    sheet = get_sheet()
-    if not sheet:
-        return ""
-    try:
-        sheet_id = st.secrets.get("GOOGLE_SHEET_ID", "")
-        ws = sheet.worksheet(_event_tab_name(event_name))
-        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid={ws.id}"
-    except Exception:
-        return ""
+    """Return the direct URL for the event's standalone spreadsheet."""
+    reg = _get_registry_map()
+    ss_id = reg.get(event_name, {}).get("Spreadsheet ID", "")
+    return f"https://docs.google.com/spreadsheets/d/{ss_id}/edit" if ss_id else ""
+
+
+@st.cache_data(ttl=60)
+def get_exhibitor_df(event_name: str = None) -> pd.DataFrame:
+    """
+    Load exhibitor data from the event's dedicated spreadsheet.
+    Pass event_name for a single event; omit to load all (slower).
+    """
+    reg = _get_registry_map()
+    if not reg:
+        return pd.DataFrame()
+    client = get_client()
+    if not client:
+        return pd.DataFrame()
+
+    targets = [event_name] if event_name else list(reg.keys())
+    frames = []
+    for ev in targets:
+        ss_id = reg.get(ev, {}).get("Spreadsheet ID", "")
+        if not ss_id:
+            continue
+        try:
+            ws = client.open_by_key(ss_id).sheet1
+            data = ws.get_all_records()
+            if data:
+                df = pd.DataFrame(data)
+                if "Event Name" not in df.columns:
+                    df.insert(0, "Event Name", ev)
+                frames.append(df)
+        except Exception:
+            continue
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
 def add_exhibitor_rows(rows: list, event_name: str) -> bool:
-    """Append a list of exhibitor dicts to the event's dedicated worksheet."""
-    ws = _get_or_create_event_ws(event_name)
-    if not ws:
+    """Upload rows to the event's own spreadsheet; create it if it doesn't exist."""
+    event_date  = rows[0].get("Event Date", "")  if rows else ""
+    uploaded_by = rows[0].get("Uploaded By", "") if rows else ""
+
+    ss = _get_or_create_event_spreadsheet(event_name, event_date, uploaded_by)
+    if not ss:
         return False
     try:
+        ws = ss.sheet1
         today = datetime.now().strftime("%d-%b-%Y")
-        batch = []
-        for r in rows:
-            batch.append([
-                r.get("Event Name", event_name),
-                r.get("Event Date", ""),
-                r.get("Company Name", ""),
-                r.get("Stand Number", ""),
-                r.get("Hall / Pavilion", ""),
-                r.get("Country", ""),
-                r.get("Website", ""),
-                r.get("Email", ""),
-                r.get("Phone", ""),
-                r.get("Contact Name", ""),
-                r.get("Call Status", "Not Called"),
-                r.get("Called By", ""),
-                r.get("Call Notes", ""),
-                r.get("Uploaded By", ""),
-                today,
-            ])
+        batch = [[
+            r.get("Event Name",    event_name),
+            r.get("Event Date",    ""),
+            r.get("Company Name",  ""),
+            r.get("Stand Number",  ""),
+            r.get("Hall / Pavilion",""),
+            r.get("Country",       ""),
+            r.get("Website",       ""),
+            r.get("Email",         ""),
+            r.get("Phone",         ""),
+            r.get("Contact Name",  ""),
+            r.get("Call Status",   "Not Called"),
+            r.get("Called By",     ""),
+            r.get("Call Notes",    ""),
+            r.get("Uploaded By",   ""),
+            today,
+        ] for r in rows]
         ws.append_rows(batch, value_input_option="RAW")
+        # Update registry counts
+        all_data = ws.get_all_records()
+        total  = len(all_data)
+        called = sum(1 for d in all_data if str(d.get("Call Status", "")) != "Not Called")
+        _update_registry_counts(event_name, total, called)
         get_exhibitor_df.clear()
         return True
     except Exception:
         return False
 
 
-def update_call_status(event_name: str, company_name: str, status: str, called_by: str, notes: str) -> bool:
-    """Update call status for a specific company in the event's worksheet."""
-    ws = _get_or_create_event_ws(event_name)
+def update_call_status(event_name: str, company_name: str, status: str,
+                       called_by: str, notes: str) -> bool:
+    """Update call status, called-by, and notes for a company in its event spreadsheet."""
+    ws = _get_event_ws(event_name)
     if not ws:
         return False
     try:
@@ -296,18 +424,21 @@ def update_call_status(event_name: str, company_name: str, status: str, called_b
         if not data:
             return False
         headers = data[0]
-        try:
-            company_col = headers.index("Company Name")
-            status_col  = headers.index("Call Status")
-            by_col      = headers.index("Called By")
-            notes_col   = headers.index("Call Notes")
-        except ValueError:
-            return False
-        for i, row in enumerate(data[1:], start=2):  # row 2 onward (1-indexed)
+        company_col = headers.index("Company Name")
+        status_col  = headers.index("Call Status")
+        by_col      = headers.index("Called By")
+        notes_col   = headers.index("Call Notes")
+        for i, row in enumerate(data[1:], start=2):
             if len(row) > company_col and row[company_col] == company_name:
                 ws.update_cell(i, status_col + 1, status)
-                ws.update_cell(i, by_col + 1, called_by)
-                ws.update_cell(i, notes_col + 1, notes)
+                ws.update_cell(i, by_col     + 1, called_by)
+                ws.update_cell(i, notes_col  + 1, notes)
+                # Refresh registry counts
+                all_records = ws.get_all_records()
+                total   = len(all_records)
+                called_n = sum(1 for d in all_records
+                               if str(d.get("Call Status", "")) != "Not Called")
+                _update_registry_counts(event_name, total, called_n)
                 get_exhibitor_df.clear()
                 return True
         return False
@@ -316,16 +447,36 @@ def update_call_status(event_name: str, company_name: str, status: str, called_b
 
 
 def delete_event_exhibitors(event_name: str) -> bool:
-    """Delete the entire worksheet for an event."""
+    """
+    Delete the event's standalone spreadsheet and remove it from the registry.
+    """
+    reg = _get_registry_map()
+    ss_id = reg.get(event_name, {}).get("Spreadsheet ID", "")
+
+    # 1. Delete the spreadsheet itself (gspread client.del_spreadsheet)
+    if ss_id:
+        client = get_client()
+        if client:
+            try:
+                client.del_spreadsheet(ss_id)
+            except Exception:
+                pass  # Continue regardless — still remove from registry
+
+    # 2. Remove from DB Registry
     sheet = get_sheet()
-    if not sheet:
-        return False
-    try:
-        ws = sheet.worksheet(_event_tab_name(event_name))
-        sheet.del_worksheet(ws)
-        get_exhibitor_df.clear()
-        return True
-    except gspread.exceptions.WorksheetNotFound:
-        return True  # Already gone — treat as success
-    except Exception:
-        return False
+    if sheet:
+        try:
+            ws = sheet.worksheet("DB Registry")
+            data = ws.get_all_values()
+            if data:
+                name_col = data[0].index("Event Name")
+                for i, row in enumerate(data[1:], start=2):
+                    if len(row) > name_col and row[name_col] == event_name:
+                        ws.delete_rows(i)
+                        break
+        except Exception:
+            pass
+
+    _get_registry_records.clear()
+    get_exhibitor_df.clear()
+    return True
