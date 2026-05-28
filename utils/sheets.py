@@ -288,14 +288,14 @@ def _get_or_create_event_spreadsheet(event_name: str, event_date: str = "",
             json={"properties": {"title": title}},
         )
         ss = gspread.Spreadsheet(client, r.json())
-    except Exception:
-        return None
+    except Exception as create_err:
+        raise RuntimeError(f"[CREATE] {create_err}") from create_err
 
     # ── Share: anyone with the link can edit (requires Drive API — non-fatal) ──
     try:
         ss.share(None, perm_type="anyone", role="writer", notify=False)
     except Exception:
-        pass  # Upload still works; sharing can be enabled later via Drive API
+        pass  # Upload still works; sharing can be enabled via Drive API later
 
     # ── Set up header row ──
     try:
@@ -304,8 +304,8 @@ def _get_or_create_event_spreadsheet(event_name: str, event_date: str = "",
         ws.append_row(EXHIBITOR_HEADERS)
         _register_event(event_name, ss.id, event_date, 0, uploaded_by)
         return ss
-    except Exception:
-        return None
+    except Exception as setup_err:
+        raise RuntimeError(f"[SETUP] {setup_err}") from setup_err
 
 
 def _get_event_ws(event_name: str):
@@ -395,9 +395,12 @@ def add_exhibitor_rows(rows: list, event_name: str):
     event_date  = rows[0].get("Event Date", "")  if rows else ""
     uploaded_by = rows[0].get("Uploaded By", "") if rows else ""
 
-    ss = _get_or_create_event_spreadsheet(event_name, event_date, uploaded_by)
+    try:
+        ss = _get_or_create_event_spreadsheet(event_name, event_date, uploaded_by)
+    except Exception as e:
+        return False, f"Sheet creation error — {e}"
     if not ss:
-        return False, "Could not create or open the Google Sheet. Check that the Sheets API is enabled for your service account."
+        return False, "Could not create the Google Sheet (unknown reason)."
     try:
         ws = ss.sheet1
         today = datetime.now().strftime("%d-%b-%Y")
