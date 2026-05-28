@@ -94,7 +94,18 @@ HISTORY_HEADERS = ["Company Name", "Stage", "Updated By", "Date/Time", "Notes"]
 EXHIBITOR_HEADERS = [
     "Event Name", "Event Date", "Company Name", "Stand Number", "Hall / Pavilion",
     "Country", "Website", "Email", "Phone", "Contact Name",
+    "Call Status", "Called By", "Call Notes",
     "Uploaded By", "Upload Date",
+]
+
+CALL_STATUSES = [
+    "Not Called",
+    "Called — Interested",
+    "Called — Not Interested",
+    "No Answer",
+    "Call Back",
+    "WhatsApp Sent",
+    "Do Not Contact",
 ]
 
 CALENDAR_HEADERS = [

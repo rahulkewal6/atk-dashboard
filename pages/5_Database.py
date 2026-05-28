@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import io
 from datetime import date
-from utils.sheets import get_exhibitor_df, add_exhibitor_rows, delete_event_exhibitors
-from utils.constants import EXHIBITIONS, USERS
+from utils.sheets import get_exhibitor_df, add_exhibitor_rows, delete_event_exhibitors, update_call_status
+from utils.constants import EXHIBITIONS, USERS, CALL_STATUSES
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
 
@@ -14,72 +14,64 @@ show_logo()
 show_user_bar()
 
 st.title("🗄️ Exhibitor Database")
-st.markdown("Central store for all exhibitor lists. Upload once — everyone can browse and download.")
+st.markdown("Central store for all exhibitor lists. Update call status here or directly in Google Sheets — both sync automatically.")
 
-# ── SESSION STATE ────────────────────────────────────────────────────────────
+# ── SESSION STATE ─────────────────────────────────────────────────────────────
 if "db_viewing" not in st.session_state:
-    st.session_state.db_viewing = None   # which list is open in detail view
+    st.session_state.db_viewing = None
 
-# ── LOAD DATA ────────────────────────────────────────────────────────────────
+# ── LOAD DATA ─────────────────────────────────────────────────────────────────
 df_all = get_exhibitor_df()
 
-# ── SUMMARY METRICS ──────────────────────────────────────────────────────────
+# ── GOOGLE SHEETS LINK ────────────────────────────────────────────────────────
+try:
+    sheet_id = st.secrets.get("GOOGLE_SHEET_ID", "")
+    sheets_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+except Exception:
+    sheets_url = ""
+
+# ── SUMMARY METRICS ───────────────────────────────────────────────────────────
 col1, col2, col3, col4 = st.columns(4)
 if not df_all.empty:
-    events    = df_all["Event Name"].nunique() if "Event Name" in df_all.columns else 0
-    total     = len(df_all)
-    has_email = int(df_all["Email"].astype(str).str.contains("@", na=False).sum()) if "Email" in df_all.columns else 0
-    no_email  = total - has_email
+    lists_count = df_all["Event Name"].nunique() if "Event Name" in df_all.columns else 0
+    total       = len(df_all)
+    if "Call Status" in df_all.columns:
+        called  = int((df_all["Call Status"].astype(str) != "Not Called").sum())
+        pending = total - called
+    else:
+        called = 0
+        pending = total
 else:
-    events = total = has_email = no_email = 0
+    lists_count = total = called = pending = 0
 
-col1.metric("Lists Stored", events)
+col1.metric("Lists Stored", lists_count)
 col2.metric("Total Contacts", total)
-col3.metric("Have Email ✅", has_email)
-col4.metric("Missing Email ⚠️", no_email)
+col3.metric("Called ✅", called)
+col4.metric("Pending 🕐", pending)
 
 st.markdown("---")
 
-# ── UPLOAD ───────────────────────────────────────────────────────────────────
+# ── UPLOAD ────────────────────────────────────────────────────────────────────
 with st.expander("⬆️ Upload New List"):
     st.caption("Supported: Excel (.xlsx, .xls) or CSV (.csv)")
 
     c1, c2 = st.columns(2)
     with c1:
-        list_type = st.radio(
-            "List type",
-            ["Exhibition list", "Personal / custom list"],
-            horizontal=True,
-            key="db_list_type",
-        )
+        list_type = st.radio("List type", ["Exhibition list", "Personal / custom list"], horizontal=True, key="db_list_type")
         if list_type == "Exhibition list":
-            event_choice = st.selectbox("Exhibition", EXHIBITIONS, key="db_event_sel")
-            event_override = st.text_input(
-                "Or type a different name (e.g. JITEX 2026, Big 5 2026)",
-                placeholder="Leave blank to use the selection above",
-                key="db_event_override",
-            )
+            event_choice   = st.selectbox("Exhibition", EXHIBITIONS, key="db_event_sel")
+            event_override = st.text_input("Or type a different name (e.g. JITEX 2026, Big 5)", placeholder="Leave blank to use selection above", key="db_event_override")
         else:
-            event_choice  = ""
-            event_override = st.text_input(
-                "List name *",
-                placeholder="e.g. Bhavika LinkedIn Leads, Deepak Cold Calls May 2026…",
-                key="db_event_custom",
-            )
-        event_date = st.date_input("Event Start Date", value=None, key="db_event_date")
+            event_choice   = ""
+            event_override = st.text_input("List name *", placeholder="e.g. Bhavika LinkedIn Leads…", key="db_event_custom")
+        event_date  = st.date_input("Event Start Date (optional)", value=None, key="db_event_date")
         uploaded_by = st.selectbox("Uploaded by *", USERS, key="db_uploader")
-
     with c2:
-        uploaded_file = st.file_uploader(
-            "Drop your file here", type=["xlsx", "xls", "csv"], key="db_file"
-        )
+        uploaded_file = st.file_uploader("Drop your file here", type=["xlsx", "xls", "csv"], key="db_file")
 
     if uploaded_file:
         try:
-            if uploaded_file.name.lower().endswith(".csv"):
-                raw_df = pd.read_csv(uploaded_file)
-            else:
-                raw_df = pd.read_excel(uploaded_file, engine="openpyxl")
+            raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.lower().endswith(".csv") else pd.read_excel(uploaded_file, engine="openpyxl")
         except Exception as e:
             st.error(f"Could not read file: {e}")
             st.stop()
@@ -87,7 +79,7 @@ with st.expander("⬆️ Upload New List"):
         st.markdown(f"**{len(raw_df)} rows detected — first 5 rows:**")
         st.dataframe(raw_df.head(5), use_container_width=True, hide_index=True)
 
-        st.markdown("**Map your columns → our fields** ('— skip —' = column not in your file):")
+        st.markdown("**Map your columns → our fields:**")
         col_opts = ["— skip —"] + list(raw_df.columns)
 
         def best_guess(keywords):
@@ -110,32 +102,20 @@ with st.expander("⬆️ Upload New List"):
         with mc8: map_contact = st.selectbox("Contact Name",    col_opts, index=best_guess(["contact","person","rep","first"]))
 
         if st.button("✅ Upload to Database", type="primary"):
-            event_label = (
-                event_override.strip() or event_choice
-                if list_type == "Exhibition list"
-                else event_override.strip()
-            )
+            event_label = (event_override.strip() or event_choice) if list_type == "Exhibition list" else event_override.strip()
             if not event_label:
                 st.error("Please enter a list name.")
             else:
-                mapping = {
-                    "Company Name":    map_company,
-                    "Stand Number":    map_stand,
-                    "Hall / Pavilion": map_hall,
-                    "Country":         map_country,
-                    "Website":         map_website,
-                    "Email":           map_email,
-                    "Phone":           map_phone,
-                    "Contact Name":    map_contact,
-                }
                 event_date_str = event_date.strftime("%d-%b-%Y") if event_date else ""
+                mapping = {"Company Name": map_company, "Stand Number": map_stand, "Hall / Pavilion": map_hall,
+                           "Country": map_country, "Website": map_website, "Email": map_email,
+                           "Phone": map_phone, "Contact Name": map_contact}
                 rows = []
                 for _, r in raw_df.iterrows():
-                    row = {"Event Name": event_label, "Event Date": event_date_str, "Uploaded By": uploaded_by}
+                    row = {"Event Name": event_label, "Event Date": event_date_str, "Uploaded By": uploaded_by, "Call Status": "Not Called"}
                     for field, src_col in mapping.items():
                         row[field] = str(r[src_col]) if src_col != "— skip —" and src_col in r else ""
                     rows.append(row)
-
                 with st.spinner(f"Uploading {len(rows)} contacts…"):
                     ok = add_exhibitor_rows(rows)
                 if ok:
@@ -146,132 +126,194 @@ with st.expander("⬆️ Upload New List"):
 
 st.markdown("---")
 
-# ── DETAIL VIEW (when a list is selected) ────────────────────────────────────
+# ── DETAIL VIEW ───────────────────────────────────────────────────────────────
 if st.session_state.db_viewing:
     selected = st.session_state.db_viewing
 
-    if st.button("← Back to all lists"):
-        st.session_state.db_viewing = None
-        st.rerun()
+    # Back button + Google Sheets link
+    hcol1, hcol2 = st.columns([1, 3])
+    with hcol1:
+        if st.button("← Back to all lists"):
+            st.session_state.db_viewing = None
+            st.rerun()
+    with hcol2:
+        if sheets_url:
+            st.markdown(
+                f"<a href='{sheets_url}' target='_blank' style='color:#FF6600; font-weight:600;'>"
+                f"📊 Open in Google Sheets → update call status directly there</a>",
+                unsafe_allow_html=True,
+            )
+            st.caption("Any changes you make in Google Sheets will reflect here within 60 seconds.")
 
     detail_df = df_all[df_all["Event Name"] == selected].copy() if "Event Name" in df_all.columns else pd.DataFrame()
 
-    # Show event date if available
-    if not detail_df.empty and "Event Date" in detail_df.columns:
-        ev_date = detail_df["Event Date"].replace("", float("nan")).dropna().iloc[0] if not detail_df["Event Date"].replace("", float("nan")).dropna().empty else None
-        if ev_date:
-            st.subheader(f"📋 {selected}   •   📅 {ev_date}")
-        else:
-            st.subheader(f"📋 {selected}")
-    else:
-        st.subheader(f"📋 {selected}")
-
     if detail_df.empty:
-        st.info("No contacts found for this list.")
-    else:
-        # Search + filter
-        s1, s2 = st.columns([3, 1])
-        with s1:
-            search = st.text_input("Search", placeholder="Company name, email, country…", key="detail_search")
-        with s2:
-            st.markdown("<br>", unsafe_allow_html=True)
-            email_only = st.checkbox("Has email only", key="detail_email_only")
+        st.info("No contacts found.")
+        st.stop()
 
-        if search:
-            mask = detail_df.apply(lambda col: col.astype(str).str.contains(search, case=False, na=False)).any(axis=1)
-            detail_df = detail_df[mask]
-        if email_only and "Email" in detail_df.columns:
-            detail_df = detail_df[detail_df["Email"].astype(str).str.contains("@", na=False)]
+    # Header + progress bar
+    ev_date = ""
+    if "Event Date" in detail_df.columns:
+        dates = detail_df["Event Date"].replace("", float("nan")).dropna()
+        if not dates.empty:
+            ev_date = f"   •   📅 {dates.iloc[0]}"
 
-        display_cols = [c for c in [
-            "Company Name", "Stand Number", "Hall / Pavilion",
-            "Country", "Email", "Website", "Phone", "Contact Name", "Event Date", "Upload Date"
-        ] if c in detail_df.columns]
+    st.subheader(f"📋 {selected}{ev_date}")
 
-        st.markdown(f"**{len(detail_df)} contact(s)**")
-        st.dataframe(detail_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+    total_list = len(detail_df)
+    if "Call Status" in detail_df.columns:
+        called_list  = int((detail_df["Call Status"].astype(str) != "Not Called").sum())
+        pending_list = total_list - called_list
+        pct = int((called_list / total_list) * 100) if total_list > 0 else 0
+        st.markdown(f"**Progress: {called_list} / {total_list} called ({pct}%) — {pending_list} remaining**")
+        st.progress(pct / 100)
 
-        # Downloads
-        dl1, dl2 = st.columns(2)
-        safe_name = selected.replace(" ", "_").replace("/", "-")
-        with dl1:
-            st.download_button(
-                "⬇️ Download CSV",
-                data=detail_df[display_cols].to_csv(index=False).encode("utf-8"),
-                file_name=f"{safe_name}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-        with dl2:
-            buf = io.BytesIO()
-            with pd.ExcelWriter(buf, engine="openpyxl") as w:
-                detail_df[display_cols].to_excel(w, index=False, sheet_name="Contacts")
-            st.download_button(
-                "⬇️ Download Excel",
-                data=buf.getvalue(),
-                file_name=f"{safe_name}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+    # Filters
+    f1, f2, f3, f4 = st.columns([2, 2, 1, 1])
+    with f1:
+        status_filter = st.selectbox("Call Status", ["All"] + CALL_STATUSES, key="detail_status")
+    with f2:
+        search = st.text_input("Search", placeholder="Company, email, country…", key="detail_search")
+    with f3:
+        caller_opts = ["All"] + USERS
+        caller_filter = st.selectbox("Called By", caller_opts, key="detail_caller")
+    with f4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        email_only = st.checkbox("Has email only", key="detail_email")
 
-        # Admin delete
-        if is_admin():
-            st.markdown("---")
-            with st.expander("🗑️ Admin — Delete this list"):
-                st.warning(f"Permanently deletes all {len(df_all[df_all['Event Name']==selected])} contacts for **{selected}**.")
-                confirm = st.text_input("Type the list name to confirm")
-                if st.button("Delete permanently", type="primary"):
-                    if confirm.strip() == selected:
-                        if delete_event_exhibitors(selected):
-                            st.success("Deleted.")
-                            st.session_state.db_viewing = None
-                            st.rerun()
-                        else:
-                            st.error("Delete failed.")
+    filtered = detail_df.copy()
+    if status_filter != "All" and "Call Status" in filtered.columns:
+        filtered = filtered[filtered["Call Status"].astype(str) == status_filter]
+    if caller_filter != "All" and "Called By" in filtered.columns:
+        filtered = filtered[filtered["Called By"].astype(str) == caller_filter]
+    if search:
+        mask = filtered.apply(lambda col: col.astype(str).str.contains(search, case=False, na=False)).any(axis=1)
+        filtered = filtered[mask]
+    if email_only and "Email" in filtered.columns:
+        filtered = filtered[filtered["Email"].astype(str).str.contains("@", na=False)]
+
+    st.markdown(f"**{len(filtered)} contact(s) shown**")
+
+    display_cols = [c for c in [
+        "Company Name", "Call Status", "Called By", "Call Notes",
+        "Stand Number", "Hall / Pavilion", "Country", "Email", "Website", "Phone", "Contact Name"
+    ] if c in filtered.columns]
+
+    st.dataframe(filtered[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+
+    # ── INLINE CALL STATUS UPDATE ─────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("**Update call status for a contact:**")
+    st.caption("Or open Google Sheets (link above) to update multiple rows faster.")
+
+    company_list = filtered["Company Name"].dropna().unique().tolist() if "Company Name" in filtered.columns else []
+    if company_list:
+        uc1, uc2, uc3 = st.columns([2, 1, 1])
+        with uc1:
+            target_company = st.selectbox("Company", company_list, key="update_company")
+        with uc2:
+            current_status = ""
+            if "Call Status" in filtered.columns:
+                match = filtered[filtered["Company Name"] == target_company]["Call Status"].values
+                current_status = match[0] if len(match) > 0 else "Not Called"
+            new_status = st.selectbox("Status", CALL_STATUSES,
+                                      index=CALL_STATUSES.index(current_status) if current_status in CALL_STATUSES else 0,
+                                      key="update_status")
+        with uc3:
+            caller = st.selectbox("Called by", USERS, key="update_caller")
+        call_notes = st.text_input("Notes (optional)", placeholder="e.g. Spoke to Ahmed, call back Thursday", key="update_notes")
+
+        if st.button("💾 Save Call Status", type="primary"):
+            with st.spinner("Saving…"):
+                ok = update_call_status(selected, target_company, new_status, caller, call_notes)
+            if ok:
+                st.success(f"✅ Updated: {target_company} → {new_status}")
+                st.rerun()
+            else:
+                st.warning("Could not update. Try editing directly in Google Sheets.")
+
+    # Downloads
+    st.markdown("---")
+    safe_name = selected.replace(" ", "_").replace("/", "-")
+    dl1, dl2, dl3 = st.columns(3)
+    with dl1:
+        st.download_button("⬇️ Download CSV", data=filtered[display_cols].to_csv(index=False).encode("utf-8"),
+                           file_name=f"{safe_name}.csv", mime="text/csv", use_container_width=True)
+    with dl2:
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as w:
+            filtered[display_cols].to_excel(w, index=False, sheet_name="Contacts")
+        st.download_button("⬇️ Download Excel", data=buf.getvalue(), file_name=f"{safe_name}.xlsx",
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    with dl3:
+        if sheets_url:
+            st.link_button("📊 Open Google Sheets", sheets_url, use_container_width=True)
+
+    if is_admin():
+        st.markdown("---")
+        with st.expander("🗑️ Admin — Delete this list"):
+            st.warning(f"Permanently deletes all {total_list} contacts for **{selected}**.")
+            confirm = st.text_input("Type the list name to confirm")
+            if st.button("Delete permanently", type="primary"):
+                if confirm.strip() == selected:
+                    if delete_event_exhibitors(selected):
+                        st.success("Deleted.")
+                        st.session_state.db_viewing = None
+                        st.rerun()
                     else:
-                        st.error("Name doesn't match.")
+                        st.error("Delete failed.")
+                else:
+                    st.error("Name doesn't match.")
 
     st.stop()
 
-# ── LIBRARY VIEW (default — shows all lists as cards) ────────────────────────
+# ── LIBRARY VIEW ──────────────────────────────────────────────────────────────
 st.subheader("All Lists")
 
 if df_all.empty:
-    st.info("No lists uploaded yet. Use the upload section above to get started.")
+    st.info("No lists uploaded yet. Use the upload section above.")
     st.stop()
 
-# Build summary table
+# Google Sheets quick link at top of library
+if sheets_url:
+    st.markdown(
+        f"<a href='{sheets_url}' target='_blank' style='color:#FF6600; font-weight:600;'>"
+        f"📊 Open full database in Google Sheets</a>  "
+        f"<span style='color:#888; font-size:0.85rem;'>— update call status directly, reflects here in 60 sec</span>",
+        unsafe_allow_html=True,
+    )
+
+st.markdown("")
+
 summary_rows = []
 for event in sorted(df_all["Event Name"].dropna().unique()):
     edf = df_all[df_all["Event Name"] == event]
-    count       = len(edf)
-    with_email  = int(edf["Email"].astype(str).str.contains("@", na=False).sum()) if "Email" in edf.columns else 0
-    uploader    = edf["Uploaded By"].dropna().iloc[-1] if "Uploaded By" in edf.columns and not edf.empty else "—"
-    upload_date = edf["Upload Date"].dropna().iloc[-1] if "Upload Date" in edf.columns and not edf.empty else "—"
-    event_date_val = edf["Event Date"].dropna().replace("", float("nan")).dropna().iloc[0] if "Event Date" in edf.columns and not edf["Event Date"].replace("", float("nan")).dropna().empty else "—"
+    count      = len(edf)
+    ev_date    = edf["Event Date"].replace("", float("nan")).dropna().iloc[0] if "Event Date" in edf.columns and not edf["Event Date"].replace("", float("nan")).dropna().empty else "—"
+    uploader   = edf["Uploaded By"].dropna().iloc[-1] if "Uploaded By" in edf.columns and not edf.empty else "—"
+    if "Call Status" in edf.columns:
+        called_n  = int((edf["Call Status"].astype(str) != "Not Called").sum())
+        pct_done  = f"{int(called_n/count*100)}%" if count > 0 else "0%"
+    else:
+        called_n = 0
+        pct_done = "0%"
     summary_rows.append({
         "List Name":    event,
-        "Event Date":   event_date_val,
+        "Event Date":   ev_date,
         "Contacts":     count,
-        "Have Email":   with_email,
-        "Missing Email":count - with_email,
+        "Called":       called_n,
+        "Pending":      count - called_n,
+        "Progress":     pct_done,
         "Uploaded By":  uploader,
-        "Last Updated": upload_date,
     })
 
-summary_df = pd.DataFrame(summary_rows)
-st.dataframe(summary_df, use_container_width=True, hide_index=True)
+st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
-st.markdown("**Click a list below to open it:**")
-
-# One button per list
+st.markdown("**Click a list to open it:**")
 btn_cols = st.columns(min(len(summary_rows), 4))
 for i, row in enumerate(summary_rows):
     with btn_cols[i % 4]:
-        if st.button(
-            f"📂 {row['List Name']}\n{row['Contacts']} contacts",
-            use_container_width=True,
-            key=f"open_{i}",
-        ):
+        label = f"📂 {row['List Name']}\n{row['Called']}/{row['Contacts']} called"
+        if st.button(label, use_container_width=True, key=f"open_{i}"):
             st.session_state.db_viewing = row["List Name"]
             st.rerun()

@@ -215,12 +215,47 @@ def add_exhibitor_rows(rows: list) -> bool:
                 r.get("Email", ""),
                 r.get("Phone", ""),
                 r.get("Contact Name", ""),
+                r.get("Call Status", "Not Called"),
+                r.get("Called By", ""),
+                r.get("Call Notes", ""),
                 r.get("Uploaded By", ""),
                 today,
             ])
         ws.append_rows(batch, value_input_option="RAW")
         get_exhibitor_df.clear()
         return True
+    except Exception:
+        return False
+
+
+def update_call_status(event_name: str, company_name: str, status: str, called_by: str, notes: str) -> bool:
+    """Update call status for a specific company in the Exhibitor Lists sheet."""
+    ws = _get_exhibitor_ws()
+    if not ws:
+        return False
+    try:
+        data = ws.get_all_values()
+        if not data:
+            return False
+        headers = data[0]
+        try:
+            event_col   = headers.index("Event Name")
+            company_col = headers.index("Company Name")
+            status_col  = headers.index("Call Status")
+            by_col      = headers.index("Called By")
+            notes_col   = headers.index("Call Notes")
+        except ValueError:
+            return False
+        for i, row in enumerate(data[1:], start=2):  # 1-indexed, skip header
+            if (len(row) > max(event_col, company_col) and
+                    row[event_col] == event_name and
+                    row[company_col] == company_name):
+                ws.update_cell(i, status_col + 1, status)
+                ws.update_cell(i, by_col + 1, called_by)
+                ws.update_cell(i, notes_col + 1, notes)
+                get_exhibitor_df.clear()
+                return True
+        return False
     except Exception:
         return False
 
