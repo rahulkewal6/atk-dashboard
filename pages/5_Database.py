@@ -41,9 +41,23 @@ with st.expander("⬆️ Upload New Exhibitor List"):
 
     c1, c2 = st.columns(2)
     with c1:
-        event_choice = st.selectbox("Exhibition *", EXHIBITIONS, key="db_event")
-        event_custom = st.text_input("Or type a custom event name", key="db_event_custom")
-        uploaded_by  = st.selectbox("Uploaded by *", USERS, key="db_uploader")
+        list_type = st.radio(
+            "List type",
+            ["Exhibition list", "Personal / custom list"],
+            horizontal=True,
+            key="db_list_type",
+        )
+        if list_type == "Exhibition list":
+            event_choice = st.selectbox("Exhibition *", EXHIBITIONS, key="db_event")
+            event_custom = ""
+        else:
+            event_choice = ""
+            event_custom = st.text_input(
+                "List name *",
+                placeholder="e.g. Bhavika LinkedIn Leads, Deepak Cold Calls May 2026…",
+                key="db_event_custom",
+            )
+        uploaded_by = st.selectbox("Uploaded by *", USERS, key="db_uploader")
     with c2:
         uploaded_file = st.file_uploader(
             "Drop your file here", type=["xlsx", "xls", "csv"], key="db_file"
@@ -129,19 +143,24 @@ if df_all.empty:
 
 events_available = sorted(df_all["Event Name"].dropna().unique().tolist()) if "Event Name" in df_all.columns else []
 
-fc1, fc2, fc3 = st.columns([2, 2, 1])
+fc1, fc2, fc3, fc4 = st.columns([2, 2, 1, 1])
 with fc1:
-    selected_event = st.selectbox("Filter by Event", ["All events"] + events_available)
+    selected_event = st.selectbox("Filter by Event / List", ["All"] + events_available)
 with fc2:
     search_term = st.text_input("Search company or email", placeholder="Type to filter…")
 with fc3:
+    uploaders_available = ["All"] + sorted(df_all["Uploaded By"].dropna().unique().tolist()) if "Uploaded By" in df_all.columns else ["All"]
+    selected_uploader = st.selectbox("Uploaded by", uploaders_available)
+with fc4:
     st.markdown("<br>", unsafe_allow_html=True)
     only_with_email = st.checkbox("Has email only")
 
 # Apply filters
 filtered = df_all.copy()
-if selected_event != "All events" and "Event Name" in filtered.columns:
+if selected_event != "All" and "Event Name" in filtered.columns:
     filtered = filtered[filtered["Event Name"] == selected_event]
+if selected_uploader != "All" and "Uploaded By" in filtered.columns:
+    filtered = filtered[filtered["Uploaded By"] == selected_uploader]
 if search_term:
     mask = filtered.apply(lambda col: col.astype(str).str.contains(search_term, case=False, na=False)).any(axis=1)
     filtered = filtered[mask]
@@ -185,7 +204,7 @@ with dl2:
     )
 
 # ── ADMIN: DELETE EVENT DATA ─────────────────────────────────────────────────
-if is_admin() and selected_event != "All events":
+if is_admin() and selected_event != "All":
     st.markdown("---")
     with st.expander("🗑️ Admin — Delete Event Data"):
         st.warning(f"This will permanently delete all **{selected_event}** contacts from the database.")
