@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+from datetime import date
 from utils.sheets import get_exhibitor_df, add_exhibitor_rows, delete_event_exhibitors
 from utils.constants import EXHIBITIONS, USERS
 from utils.branding import inject_css, show_logo
@@ -65,6 +66,7 @@ with st.expander("⬆️ Upload New List"):
                 placeholder="e.g. Bhavika LinkedIn Leads, Deepak Cold Calls May 2026…",
                 key="db_event_custom",
             )
+        event_date = st.date_input("Event Start Date", value=None, key="db_event_date")
         uploaded_by = st.selectbox("Uploaded by *", USERS, key="db_uploader")
 
     with c2:
@@ -126,9 +128,10 @@ with st.expander("⬆️ Upload New List"):
                     "Phone":           map_phone,
                     "Contact Name":    map_contact,
                 }
+                event_date_str = event_date.strftime("%d-%b-%Y") if event_date else ""
                 rows = []
                 for _, r in raw_df.iterrows():
-                    row = {"Event Name": event_label, "Uploaded By": uploaded_by}
+                    row = {"Event Name": event_label, "Event Date": event_date_str, "Uploaded By": uploaded_by}
                     for field, src_col in mapping.items():
                         row[field] = str(r[src_col]) if src_col != "— skip —" and src_col in r else ""
                     rows.append(row)
@@ -151,9 +154,17 @@ if st.session_state.db_viewing:
         st.session_state.db_viewing = None
         st.rerun()
 
-    st.subheader(f"📋 {selected}")
-
     detail_df = df_all[df_all["Event Name"] == selected].copy() if "Event Name" in df_all.columns else pd.DataFrame()
+
+    # Show event date if available
+    if not detail_df.empty and "Event Date" in detail_df.columns:
+        ev_date = detail_df["Event Date"].replace("", float("nan")).dropna().iloc[0] if not detail_df["Event Date"].replace("", float("nan")).dropna().empty else None
+        if ev_date:
+            st.subheader(f"📋 {selected}   •   📅 {ev_date}")
+        else:
+            st.subheader(f"📋 {selected}")
+    else:
+        st.subheader(f"📋 {selected}")
 
     if detail_df.empty:
         st.info("No contacts found for this list.")
@@ -174,7 +185,7 @@ if st.session_state.db_viewing:
 
         display_cols = [c for c in [
             "Company Name", "Stand Number", "Hall / Pavilion",
-            "Country", "Email", "Website", "Phone", "Contact Name", "Upload Date"
+            "Country", "Email", "Website", "Phone", "Contact Name", "Event Date", "Upload Date"
         ] if c in detail_df.columns]
 
         st.markdown(f"**{len(detail_df)} contact(s)**")
@@ -237,8 +248,10 @@ for event in sorted(df_all["Event Name"].dropna().unique()):
     with_email  = int(edf["Email"].astype(str).str.contains("@", na=False).sum()) if "Email" in edf.columns else 0
     uploader    = edf["Uploaded By"].dropna().iloc[-1] if "Uploaded By" in edf.columns and not edf.empty else "—"
     upload_date = edf["Upload Date"].dropna().iloc[-1] if "Upload Date" in edf.columns and not edf.empty else "—"
+    event_date_val = edf["Event Date"].dropna().replace("", float("nan")).dropna().iloc[0] if "Event Date" in edf.columns and not edf["Event Date"].replace("", float("nan")).dropna().empty else "—"
     summary_rows.append({
         "List Name":    event,
+        "Event Date":   event_date_val,
         "Contacts":     count,
         "Have Email":   with_email,
         "Missing Email":count - with_email,

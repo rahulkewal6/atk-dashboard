@@ -206,6 +206,7 @@ def add_exhibitor_rows(rows: list) -> bool:
         for r in rows:
             batch.append([
                 r.get("Event Name", ""),
+                r.get("Event Date", ""),
                 r.get("Company Name", ""),
                 r.get("Stand Number", ""),
                 r.get("Hall / Pavilion", ""),
