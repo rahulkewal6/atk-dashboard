@@ -11,6 +11,9 @@ SCOPES = [
 
 SHEET_NAME = "ATK Dashboard"
 
+# Fallback if secret is missing or malformed — the spreadsheet ID is not sensitive
+_EXHIBITOR_SHEET_ID_DEFAULT = "1r1u9i964PtS80MHo7-6orjUnz0z_IkilXQzIKrojXCk"
+
 
 @st.cache_resource
 def get_client():
@@ -189,7 +192,8 @@ def _get_exhibitor_ss():
     if not client:
         return None
     try:
-        return client.open_by_key(st.secrets["EXHIBITOR_SHEET_ID"])
+        sheet_id = st.secrets.get("EXHIBITOR_SHEET_ID", _EXHIBITOR_SHEET_ID_DEFAULT).strip()
+        return client.open_by_key(sheet_id)
     except Exception:
         return None
 
@@ -308,7 +312,7 @@ def get_all_exhibitor_events() -> list:
     Return summary list for all registered events — cached 60 s.
     Each dict: {name, worksheet_gid, url, event_date, total, called, uploaded_by}
     """
-    exhibitor_sheet_id = st.secrets.get("EXHIBITOR_SHEET_ID", "")
+    exhibitor_sheet_id = st.secrets.get("EXHIBITOR_SHEET_ID", _EXHIBITOR_SHEET_ID_DEFAULT).strip()
     result = []
     for r in _get_registry_records():
         if not r.get("Event Name"):
@@ -333,7 +337,7 @@ def get_all_exhibitor_events() -> list:
 
 def get_event_sheet_url(event_name: str) -> str:
     """Return the direct URL for the event's tab in the exhibitor spreadsheet."""
-    exhibitor_sheet_id = st.secrets.get("EXHIBITOR_SHEET_ID", "")
+    exhibitor_sheet_id = st.secrets.get("EXHIBITOR_SHEET_ID", _EXHIBITOR_SHEET_ID_DEFAULT).strip()
     reg = _get_registry_map()
     gid = reg.get(event_name, {}).get("Worksheet GID", "")
     if exhibitor_sheet_id and gid != "":
