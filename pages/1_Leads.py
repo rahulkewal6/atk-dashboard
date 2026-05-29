@@ -5,13 +5,13 @@ from utils.constants import PIPELINE_STAGES, STAGE_COLORS, EXHIBITIONS, SOURCES,
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
 
-st.set_page_config(page_title="Pipeline", page_icon="🔴", layout="wide")
+st.set_page_config(page_title="Leads", page_icon="🔴", layout="wide")
 inject_css()
 require_login()
 show_logo()
 show_user_bar()
 
-st.title("🔴 Pipeline")
+st.title("🔴 Leads")
 st.markdown("All active leads and their current stages.")
 
 # --- ADD NEW LEAD ---
