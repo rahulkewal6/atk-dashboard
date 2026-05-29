@@ -1,3 +1,4 @@
+import re
 import gspread
 import pandas as pd
 import streamlit as st
@@ -165,6 +166,35 @@ def add_calendar_event(data: dict):
         return True
     except Exception:
         return False
+
+
+def read_external_sheet(sheet_url: str):
+    """
+    Read all records from a Google Sheet URL (sheet must be shared with the service account).
+    Returns (pd.DataFrame, error_string). Error string is empty on success.
+    """
+    client = get_client()
+    if not client:
+        return pd.DataFrame(), "Could not connect to Google Sheets."
+    match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+    if not match:
+        return pd.DataFrame(), "Invalid URL — copy the full link from your browser address bar."
+    ss_id = match.group(1).strip()
+    try:
+        ss = client.open_by_key(ss_id)
+        ws = ss.sheet1
+        data = ws.get_all_records()
+        if not data:
+            return pd.DataFrame(), "The sheet appears to be empty or has no data rows."
+        return pd.DataFrame(data), ""
+    except Exception as e:
+        err = str(e)
+        if "403" in err or "PERMISSION_DENIED" in err:
+            return pd.DataFrame(), (
+                "Access denied. Share the Google Sheet with Editor access to:\n"
+                "atk-dashboard@atk-dashboard-497500.iam.gserviceaccount.com"
+            )
+        return pd.DataFrame(), f"Could not read sheet: {err}"
 
 
 # ── EXHIBITOR DATABASE — ONE TAB PER EVENT IN "ATK Exhibitor Database" ────────

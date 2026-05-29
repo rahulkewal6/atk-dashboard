@@ -4,6 +4,7 @@ import io
 from utils.sheets import (
     get_exhibitor_df, add_exhibitor_rows, delete_event_exhibitors,
     update_call_status, get_all_exhibitor_events, get_event_sheet_url,
+    read_external_sheet,
 )
 from utils.constants import EXHIBITIONS, USERS, CALL_STATUSES
 from utils.branding import inject_css, show_logo
@@ -41,8 +42,15 @@ st.markdown("---")
 
 # ── UPLOAD ────────────────────────────────────────────────────────────────────
 with st.expander("⬆️ Upload New List"):
-    st.caption("Supported: Excel (.xlsx, .xls) or CSV (.csv). A new Google Sheet is created automatically for each list.")
 
+    upload_mode = st.radio(
+        "Add list from:",
+        ["📁 File (Excel / CSV)", "🔗 Google Sheet link"],
+        horizontal=True,
+        key="db_upload_mode",
+    )
+
+    # ── Common metadata fields ────────────────────────────────────────────────
     c1, c2 = st.columns(2)
     with c1:
         list_type = st.radio("List type", ["Exhibition list", "Personal / custom list"], horizontal=True, key="db_list_type")
@@ -54,17 +62,37 @@ with st.expander("⬆️ Upload New List"):
             event_override = st.text_input("List name *", placeholder="e.g. Bhavika LinkedIn Leads…", key="db_event_custom")
         event_date  = st.date_input("Event Start Date (optional)", value=None, key="db_event_date")
         uploaded_by = st.selectbox("Uploaded by *", USERS, key="db_uploader")
+
+    # ── Source: file or Google Sheet link ────────────────────────────────────
     with c2:
-        uploaded_file = st.file_uploader("Drop your file here", type=["xlsx", "xls", "csv"], key="db_file")
+        if upload_mode == "📁 File (Excel / CSV)":
+            st.caption("Supported: Excel (.xlsx, .xls) or CSV (.csv).")
+            uploaded_file = st.file_uploader("Drop your file here", type=["xlsx", "xls", "csv"], key="db_file")
+            raw_df = None
+            if uploaded_file:
+                try:
+                    raw_df = (pd.read_csv(uploaded_file) if uploaded_file.name.lower().endswith(".csv")
+                              else pd.read_excel(uploaded_file, engine="openpyxl"))
+                except Exception as e:
+                    st.error(f"Could not read file: {e}")
+        else:
+            st.caption("The sheet must be shared with **Editor** access to the service account below.")
+            sheet_link = st.text_input(
+                "Paste Google Sheet link *",
+                placeholder="https://docs.google.com/spreadsheets/d/…",
+                key="db_sheet_link",
+            )
+            st.code("atk-dashboard@atk-dashboard-497500.iam.gserviceaccount.com", language=None)
+            raw_df = None
+            if sheet_link:
+                with st.spinner("Reading Google Sheet…"):
+                    raw_df, gs_err = read_external_sheet(sheet_link)
+                if gs_err:
+                    st.error(gs_err)
+                    raw_df = None
 
-    if uploaded_file:
-        try:
-            raw_df = (pd.read_csv(uploaded_file) if uploaded_file.name.lower().endswith(".csv")
-                      else pd.read_excel(uploaded_file, engine="openpyxl"))
-        except Exception as e:
-            st.error(f"Could not read file: {e}")
-            st.stop()
-
+    # ── Preview + column mapping (shared for both modes) ─────────────────────
+    if raw_df is not None and not raw_df.empty:
         st.markdown(f"**{len(raw_df)} rows detected — first 5 rows:**")
         st.dataframe(raw_df.head(5), use_container_width=True, hide_index=True)
 
@@ -81,16 +109,17 @@ with st.expander("⬆️ Upload New List"):
         mc1, mc2, mc3 = st.columns(3)
         mc4, mc5, mc6 = st.columns(3)
         mc7, mc8      = st.columns(2)
-        with mc1: map_company = st.selectbox("Company Name",    col_opts, index=best_guess(["company","name","exhibitor","brand"]))
-        with mc2: map_stand   = st.selectbox("Stand Number",    col_opts, index=best_guess(["stand","booth","stall"]))
-        with mc3: map_hall    = st.selectbox("Hall / Pavilion", col_opts, index=best_guess(["hall","pavilion","zone"]))
-        with mc4: map_country = st.selectbox("Country",         col_opts, index=best_guess(["country","nation"]))
-        with mc5: map_website = st.selectbox("Website",         col_opts, index=best_guess(["website","web","url","site"]))
-        with mc6: map_email   = st.selectbox("Email",           col_opts, index=best_guess(["email","e-mail","mail"]))
-        with mc7: map_phone   = st.selectbox("Phone",           col_opts, index=best_guess(["phone","mobile","tel"]))
-        with mc8: map_contact = st.selectbox("Contact Name",    col_opts, index=best_guess(["contact","person","rep","first"]))
+        with mc1: map_company = st.selectbox("Company Name",    col_opts, index=best_guess(["company","name","exhibitor","brand"]), key="mc_company")
+        with mc2: map_stand   = st.selectbox("Stand Number",    col_opts, index=best_guess(["stand","booth","stall"]), key="mc_stand")
+        with mc3: map_hall    = st.selectbox("Hall / Pavilion", col_opts, index=best_guess(["hall","pavilion","zone"]), key="mc_hall")
+        with mc4: map_country = st.selectbox("Country",         col_opts, index=best_guess(["country","nation"]), key="mc_country")
+        with mc5: map_website = st.selectbox("Website",         col_opts, index=best_guess(["website","web","url","site"]), key="mc_website")
+        with mc6: map_email   = st.selectbox("Email",           col_opts, index=best_guess(["email","e-mail","mail"]), key="mc_email")
+        with mc7: map_phone   = st.selectbox("Phone",           col_opts, index=best_guess(["phone","mobile","tel"]), key="mc_phone")
+        with mc8: map_contact = st.selectbox("Contact Name",    col_opts, index=best_guess(["contact","person","rep","first"]), key="mc_contact")
 
-        if st.button("✅ Upload to Database", type="primary"):
+        btn_label = "✅ Upload to Database" if upload_mode == "📁 File (Excel / CSV)" else "✅ Import to Database"
+        if st.button(btn_label, type="primary"):
             event_label = (event_override.strip() or event_choice) if list_type == "Exhibition list" else event_override.strip()
             if not event_label:
                 st.error("Please enter a list name.")
@@ -111,7 +140,7 @@ with st.expander("⬆️ Upload New List"):
                     for field, src_col in mapping.items():
                         row[field] = str(r[src_col]) if src_col != "— skip —" and src_col in r else ""
                     rows.append(row)
-                with st.spinner(f"Creating Google Sheet and uploading {len(rows)} contacts…"):
+                with st.spinner(f"Uploading {len(rows)} contacts…"):
                     ok, err_msg = add_exhibitor_rows(rows, event_label)
                 if ok:
                     sheet_url = get_event_sheet_url(event_label)
