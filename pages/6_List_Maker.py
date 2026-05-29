@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from utils.scraper import (
-    fetch_page, paginate_url, extract_exhibitors,
+    fetch_page, find_next_page_url, extract_exhibitors,
     enrich_missing_websites, rows_to_df, df_to_excel_bytes,
 )
 from utils.branding import inject_css, show_logo
@@ -14,7 +14,7 @@ show_logo()
 show_user_bar()
 
 st.title("🕷️ List Maker")
-st.markdown("Paste any exhibitor list URL — Gemini reads the page and returns a downloadable Excel sheet.")
+st.markdown("Paste any exhibitor list URL — Gemini scrapes every page and returns a downloadable Excel sheet.")
 
 # ── API key check ─────────────────────────────────────────────────────────────
 api_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -40,21 +40,25 @@ with c1:
     )
 with c2:
     max_pages = st.number_input(
-        "Pages to scrape",
-        min_value=1, max_value=30, value=1,
-        help="If the list has pagination (page 1, 2, 3…), set how many pages to fetch.",
+        "Max pages (safety cap)",
+        min_value=1, max_value=100, value=30,
+        help=(
+            "Gemini auto-detects the next page URL from each page's content — "
+            "this is just a safety cap so the scraper doesn't run forever. "
+            "Set it higher than the number of pages you expect."
+        ),
         key="lm_pages",
     )
 
 instructions = st.text_area(
-    "📝 Page notes — tell Claude what this page looks like (optional but helps a lot)",
+    "📝 Page notes — describe the page structure to get better results",
     placeholder=(
         "Examples:\n"
-        "• Each exhibitor has a clickable card — details (email, phone) are on the individual page\n"
-        "• The page loads more companies as you scroll down (infinite scroll)\n"
-        "• Pagination at the bottom — set 'Pages to scrape' above\n"
-        "• Only company names are shown; no contact details on this page\n"
-        "• Company names are in a table with columns: Name, Country, Stand, Hall"
+        "• Exhibitor names are listed with country and stand number — 10 per page, pagination at the bottom\n"
+        "• Each company has a clickable card — details (email, phone, website) are only on the individual company page\n"
+        "• The page loads more companies as you scroll (infinite scroll)\n"
+        "• Company names are in a table with columns: Name, Country, Stand, Hall\n"
+        "• Only company names shown — no contact details on this page"
     ),
     height=130,
     key="lm_notes",
@@ -64,26 +68,26 @@ col_enrich, col_warn = st.columns([1, 2])
 with col_enrich:
     do_enrich = st.checkbox(
         "🔍 Search for missing website URLs",
-        help="For companies without a website listed, uses Jina.ai search to find one. Adds a few seconds per company.",
+        help="For companies without a website listed, Jina.ai search finds the official site. ~3 sec per company.",
         key="lm_enrich",
     )
 with col_warn:
     if do_enrich:
-        st.caption("⏱️ This adds ~3–5 seconds per company with a missing website. For large lists, uncheck this and enrich later.")
+        st.caption("⏱️ Adds ~3 seconds per company with a missing website. For large lists (200+), run without this first, then enrich a filtered subset.")
 
 st.markdown("---")
 
-# ── LIMITATION NOTE ───────────────────────────────────────────────────────────
 with st.expander("ℹ️ What this tool can and can't do"):
     st.markdown("""
 **Works great:**
 - Standard HTML exhibitor lists (tables, cards, grids)
-- JavaScript/React-rendered pages (handled by Jina.ai)
-- Infinite scroll pages (Jina.ai auto-scrolls)
-- Paginated lists — set the page count above
+- JavaScript/React-rendered pages — handled automatically by Jina.ai
+- Infinite scroll — Jina.ai auto-scrolls before returning content
+- **Any pagination pattern** — Gemini reads each page and finds the real "Next" link, no guessing
 
 **Partial support:**
-- Pages where you click each exhibitor for details — the tool extracts names from the listing page, but can't automatically click through to each detail page. Add a note above to let Claude know, and it will extract what's visible.
+- Pages where you must click each exhibitor for their details (email, phone).
+  The tool will capture names/countries from the listing page. Add a note above describing this.
 
 **Not supported:**
 - Login-required pages
@@ -94,42 +98,59 @@ with st.expander("ℹ️ What this tool can and can't do"):
 if st.button("🕷️  Scrape & Extract", type="primary", disabled=not url):
 
     all_rows = []
-    has_more_hint = False
+    page_counts = []          # track how many companies per page for verification
+    visited_urls = set()      # duplicate-page guard
+    current_url = url.strip()
+    base_url = url.strip()
 
     with st.status("Working…", expanded=True) as status:
 
         for page_num in range(1, max_pages + 1):
-            page_url = paginate_url(url, page_num)
-            st.write(f"📄 Fetching page {page_num}: `{page_url}`")
 
-            content, err = fetch_page(page_url)
+            # Guard: don't re-fetch the same URL (loop detection)
+            if current_url in visited_urls:
+                st.write(f"   🔁 Loop detected — same URL returned again. Stopping.")
+                break
+            visited_urls.add(current_url)
+
+            st.write(f"📄 Page {page_num}: `{current_url}`")
+            content, err = fetch_page(current_url)
+
             if err:
-                st.warning(f"Could not fetch page {page_num}: {err}")
+                st.warning(f"   ⚠️ Could not fetch: {err}")
                 break
             if not content.strip():
-                st.warning(f"Page {page_num} returned empty content.")
+                st.warning(f"   ⚠️ Empty response.")
                 break
 
-            st.write(f"   ✅ {len(content):,} characters received")
-            st.write(f"🤖 Extracting exhibitors from page {page_num}…")
+            st.write(f"   ✅ {len(content):,} chars received")
+            st.write(f"   🤖 Extracting exhibitors…")
 
-            rows, extract_err, page_has_more = extract_exhibitors(
-                content, page_url, instructions, api_key
+            rows, extract_err, gemini_has_more = extract_exhibitors(
+                content, current_url, instructions, api_key
             )
             if extract_err:
-                st.error(f"Extraction error on page {page_num}: {extract_err}")
+                st.error(f"   ❌ Extraction error: {extract_err}")
                 break
 
-            st.write(f"   ✅ {len(rows)} exhibitors found on page {page_num}")
+            page_counts.append(len(rows))
             all_rows.extend(rows)
+            st.write(f"   ✅ **{len(rows)} companies** extracted from page {page_num} "
+                     f"(running total: {len(all_rows)})")
 
-            if page_has_more and page_num < max_pages:
-                st.write(f"   ↪️ More pages detected — continuing…")
-            elif not page_has_more and page_num > 1:
-                st.write(f"   🏁 No more pages detected.")
+            # Find real next page URL using Gemini
+            next_url = find_next_page_url(content, current_url, base_url, api_key)
+
+            if not next_url:
+                st.write(f"   🏁 No next page found — all pages scraped.")
+                break
+            if next_url == current_url:
+                st.write(f"   🏁 Next page URL identical — end of pagination.")
                 break
 
-        # Deduplicate by company name
+            current_url = next_url
+
+        # ── Deduplicate ──────────────────────────────────────────────────────
         seen = set()
         deduped = []
         for r in all_rows:
@@ -138,11 +159,13 @@ if st.button("🕷️  Scrape & Extract", type="primary", disabled=not url):
                 seen.add(key)
                 deduped.append(r)
             elif not key:
-                deduped.append(r)  # Keep rows with no name (might have other data)
+                deduped.append(r)
 
-        st.write(f"🧹 Deduplicated: {len(all_rows)} → {len(deduped)} unique companies")
+        duplicates_removed = len(all_rows) - len(deduped)
+        if duplicates_removed:
+            st.write(f"🧹 Removed {duplicates_removed} duplicates → **{len(deduped)} unique companies**")
 
-        # Website enrichment
+        # ── Website enrichment ────────────────────────────────────────────────
         if do_enrich and deduped:
             missing_count = sum(1 for r in deduped if not r.get("website"))
             if missing_count:
@@ -156,38 +179,50 @@ if st.button("🕷️  Scrape & Extract", type="primary", disabled=not url):
                 placeholder.empty()
                 found = sum(1 for r in deduped if r.get("website"))
                 st.write(f"   ✅ Websites found: {found} / {len(deduped)}")
-            else:
-                st.write("   ✅ All companies already have website URLs.")
 
         if not deduped:
             status.update(label="⚠️ No exhibitors found", state="error")
             st.warning(
                 "No exhibitors were extracted. Try:\n"
                 "- Adding page notes above describing the page structure\n"
-                "- Increasing 'Pages to scrape' if it's a paginated list\n"
                 "- Checking if the page requires login or has bot protection"
             )
         else:
             df = rows_to_df(deduped)
             st.session_state["lm_df"] = df
+            st.session_state["lm_page_counts"] = page_counts
             status.update(
-                label=f"✅ Done — {len(df)} exhibitors extracted",
+                label=f"✅ Done — {len(df)} unique companies across {len(page_counts)} page(s)",
                 state="complete",
             )
 
 # ── RESULTS ───────────────────────────────────────────────────────────────────
 if "lm_df" in st.session_state:
     df = st.session_state["lm_df"]
+    page_counts = st.session_state.get("lm_page_counts", [])
 
     st.markdown("---")
-    st.subheader(f"📋 {len(df)} Exhibitors")
+    st.subheader(f"📋 {len(df)} Unique Companies Extracted")
+
+    # Per-page count — lets user verify nothing was missed
+    if len(page_counts) > 1:
+        with st.expander(f"📊 Companies per page — verify completeness ({len(page_counts)} pages scraped)"):
+            pc_df = pd.DataFrame({
+                "Page": [f"Page {i+1}" for i in range(len(page_counts))],
+                "Companies found": page_counts,
+            })
+            st.dataframe(pc_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "Cross-check these counts against the website to confirm nothing was missed. "
+                "If a page shows 0 companies, that page may have failed to load."
+            )
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total", len(df))
+    m1.metric("Total Companies", len(df))
     m2.metric("With Email",
               int(df["Email"].str.contains("@", na=False).sum()) if "Email" in df.columns else 0)
     m3.metric("With Phone",
-              int((df["Phone"].str.len() > 3).sum()) if "Phone" in df.columns else 0)
+              int((df["Phone"].astype(str).str.len() > 3).sum()) if "Phone" in df.columns else 0)
     m4.metric("With Website",
               int(df["Website"].str.startswith("http", na=False).sum()) if "Website" in df.columns else 0)
 
@@ -215,4 +250,6 @@ if "lm_df" in st.session_state:
     with dl3:
         if st.button("🗑️ Clear results", use_container_width=True):
             del st.session_state["lm_df"]
+            if "lm_page_counts" in st.session_state:
+                del st.session_state["lm_page_counts"]
             st.rerun()

@@ -55,33 +55,76 @@ def fetch_page(url: str) -> tuple:
         return "", str(e)
 
 
-# ── URL pagination helper ──────────────────────────────────────────────────────
+# ── Gemini client (shared) ────────────────────────────────────────────────────
 
-def paginate_url(base_url: str, page_num: int) -> str:
+def _gemini_model(api_key: str, system: str = ""):
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(model_name="gemini-1.5-flash",
+                                 system_instruction=system or "You are a helpful assistant.")
+
+
+# ── Smart pagination: Gemini finds the REAL next-page URL ─────────────────────
+
+_NEXT_PAGE_SYSTEM = "You are a web scraping assistant. Analyse webpage content and return only what is asked — no explanation."
+
+_NEXT_PAGE_PROMPT = """Current page URL: {current_url}
+Base / start URL: {base_url}
+
+Look at the page content below and find the URL of the NEXT page of results.
+Look for: "Next", ">", "›", pagination numbers, or any link labelled with the next page number.
+
+Rules:
+- If you find a next-page URL, return it as a single line with no other text.
+- If it is a relative URL (e.g. /exhibitors?page=2), prepend the domain to make it absolute.
+- If there is NO next page (last page or only one page), return exactly: NO_MORE_PAGES
+- Return NOTHING else — just the URL or NO_MORE_PAGES.
+
+PAGE CONTENT (first 30 000 chars):
+{content}"""
+
+
+def find_next_page_url(content: str, current_url: str, base_url: str, api_key: str) -> str:
     """
-    Given a base URL and page number > 1, return a paginated URL.
-    Tries common patterns: ?page=N, &page=N, /page/N, /page-N
+    Ask Gemini to find the real next-page URL from the page content.
+    Returns the next URL string, or "" if no more pages.
     """
-    if page_num == 1:
-        return base_url
-    if "?" in base_url:
-        # Remove existing page param if any
-        cleaned = re.sub(r'[&?]page=\d+', '', base_url).rstrip("&")
-        return f"{cleaned}&page={page_num}"
-    return f"{base_url.rstrip('/')}/page/{page_num}"
+    try:
+        model = _gemini_model(api_key, _NEXT_PAGE_SYSTEM)
+        prompt = _NEXT_PAGE_PROMPT.format(
+            current_url=current_url,
+            base_url=base_url,
+            content=content[:30_000],
+        )
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        if not result or "NO_MORE_PAGES" in result.upper():
+            return ""
+        # Basic sanity check — must look like a URL
+        if result.startswith("http"):
+            return result
+        # Try to make relative URL absolute
+        from urllib.parse import urljoin
+        return urljoin(base_url, result)
+    except Exception:
+        return ""
 
 
-# ── Claude extraction ──────────────────────────────────────────────────────────
+# ── Extraction ────────────────────────────────────────────────────────────────
 
-_EXTRACTION_SYSTEM = """You are a data extraction assistant. Extract exhibitor data from exhibition/trade-show webpage content. Return ONLY a valid JSON array — no explanation, no markdown fences, no extra text. Just the raw JSON array."""
+_EXTRACTION_SYSTEM = (
+    "You are a precise data extraction assistant. "
+    "Extract exhibitor data from exhibition/trade-show webpage content. "
+    "Return ONLY a valid JSON array — no explanation, no markdown fences, no extra text."
+)
 
 _EXTRACTION_PROMPT = """URL scraped: {url}
 
 User notes about this page:
 {instructions}
 
-Extract every exhibitor/company listed. For each, extract all of:
-- company_name  (required — use "" if truly absent)
+Extract EVERY exhibitor/company listed on this page. For each one, extract:
+- company_name  (required — use "" only if truly absent)
 - country       (country of origin, or "")
 - email         (email address, or "")
 - phone         (phone/mobile number, or "")
@@ -89,51 +132,41 @@ Extract every exhibitor/company listed. For each, extract all of:
 - stand_number  (booth/stand number, or "")
 - hall          (hall, pavilion, zone, or "")
 
-Rules:
-- Include ALL companies found, even if only the name is available.
-- Do not skip companies just because they have no contact info.
-- If you see pagination links or "Load more" text, note it in a final object: {{"_meta": "has_more_pages"}}
+Critical rules:
+- Include EVERY company found — do not skip any, even if they have no contact info.
+- Do not summarise, do not say "and X more" — list every single one.
+- If you see a "Next" / pagination link in the content, add one final object: {{"_meta": "has_more_pages"}}
 - Return ONLY the JSON array. No markdown, no commentary.
 
-PAGE CONTENT (truncated to first 60 000 chars):
+PAGE CONTENT:
 {content}"""
 
 
 def extract_exhibitors(content: str, url: str, instructions: str, api_key: str) -> tuple:
     """
-    Use Gemini 1.5 Flash (free) to extract structured exhibitor data from page text.
+    Use Gemini 1.5 Flash (free, 1M context) to extract all exhibitors from page text.
     Returns (list_of_dicts, error_str, has_more_pages_hint).
     """
     try:
-        import google.generativeai as genai
-
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=_EXTRACTION_SYSTEM,
-        )
-
+        model = _gemini_model(api_key, _EXTRACTION_SYSTEM)
         prompt = _EXTRACTION_PROMPT.format(
             url=url,
             instructions=instructions.strip() if instructions else "None provided.",
-            content=content[:200_000],   # Gemini Flash handles up to 1M tokens
+            content=content[:800_000],   # Gemini Flash: 1M token window
         )
-
         response = model.generate_content(prompt)
         raw = response.text.strip()
 
-        # Strip markdown code fences if Gemini wrapped the JSON
+        # Strip markdown fences if Gemini added them
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
 
-        # Extract JSON array from response
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if not match:
-            return [], f"Gemini returned unexpected format: {raw[:300]}", False
+            return [], f"Unexpected response format: {raw[:300]}", False
 
         data = json.loads(match.group())
 
-        # Check for has-more hint
         has_more = False
         clean = []
         for row in data:
