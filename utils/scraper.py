@@ -48,25 +48,40 @@ def fetch_page(url: str) -> tuple:
         return "", str(e)
 
 
-# ── Gemini client (shared) ────────────────────────────────────────────────────
+# ── AI client — auto-detects OpenAI vs Gemini from key format ─────────────────
 
-def _gemini_generate(api_key: str, system: str, prompt: str) -> str:
+def _ai_generate(api_key: str, system: str, prompt: str) -> str:
     """
-    Call Gemini 2.0 Flash via the google-genai SDK.
-    Supports both AIza... and AQ.... key formats from Google AI Studio.
+    Auto-detects provider from the API key:
+      - OpenAI keys start with 'sk-'  → uses gpt-4o-mini
+      - Everything else               → uses Gemini 2.0 Flash (google-genai)
     """
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system or "You are a helpful assistant.",
-        ),
-    )
-    return response.text
+    if api_key.startswith("sk-"):
+        # ── OpenAI ──────────────────────────────────────────────────────────
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system or "You are a helpful assistant."},
+                {"role": "user",   "content": prompt},
+            ],
+            temperature=0,
+        )
+        return resp.choices[0].message.content
+    else:
+        # ── Gemini ──────────────────────────────────────────────────────────
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system or "You are a helpful assistant.",
+            ),
+        )
+        return resp.text
 
 
 # ── Smart pagination ──────────────────────────────────────────────────────────
@@ -97,7 +112,7 @@ def find_next_page_url(content: str, current_url: str, base_url: str, api_key: s
             base_url=base_url,
             content=content[:30_000],
         )
-        result = _gemini_generate(api_key, _NEXT_PAGE_SYSTEM, prompt).strip()
+        result = _ai_generate(api_key, _NEXT_PAGE_SYSTEM, prompt).strip()
         if not result or "NO_MORE_PAGES" in result.upper():
             return ""
         if result.startswith("http"):
@@ -151,9 +166,9 @@ def extract_exhibitors(content: str, url: str, instructions: str, api_key: str) 
         prompt = _EXTRACTION_PROMPT.format(
             url=url,
             instructions=instructions.strip() if instructions else "None provided.",
-            content=content[:800_000],
+            content=content[:300_000],   # 300K chars ≈ 75K tokens; fits both GPT-4o-mini and Gemini
         )
-        raw = _gemini_generate(api_key, _EXTRACTION_SYSTEM, prompt).strip()
+        raw = _ai_generate(api_key, _EXTRACTION_SYSTEM, prompt).strip()
 
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
@@ -264,7 +279,7 @@ def enrich_detail_pages(rows: list, api_key: str, site_domain: str = "",
                     "For 'website': return the company's OWN website, not the exhibition directory URL.\n\n"
                     f"PAGE CONTENT:\n{content[:15_000]}"
                 )
-                raw = _gemini_generate(
+                raw = _ai_generate(
                     api_key,
                     "You extract contact info. Return only a JSON object.",
                     prompt,

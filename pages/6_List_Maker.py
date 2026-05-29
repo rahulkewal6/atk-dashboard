@@ -16,18 +16,24 @@ show_user_bar()
 st.title("🕷️ List Maker")
 st.markdown("Paste any exhibitor list URL — Gemini scrapes every page and returns a downloadable Excel sheet.")
 
-# ── API key check ─────────────────────────────────────────────────────────────
-api_key = st.secrets.get("GEMINI_API_KEY", "")
+# ── API key check — supports OpenAI or Gemini ─────────────────────────────────
+_openai_key = st.secrets.get("OPENAI_API_KEY", "")
+_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+api_key = _openai_key or _gemini_key
+
 if not api_key:
     st.error(
-        "**Gemini API key not configured.**  \n"
-        "1. Go to [aistudio.google.com](https://aistudio.google.com) → **Get API key**  \n"
-        "2. Copy the key  \n"
-        "3. Add it to Streamlit Cloud secrets as: `GEMINI_API_KEY = \"your-key-here\"`  \n\n"
-        "_Gemini 1.5 Flash is completely free (15 requests/min, 1M tokens/day)._"
+        "**AI API key not configured.**  \n\n"
+        "Add one of these to your Streamlit Cloud secrets:  \n"
+        "- `OPENAI_API_KEY = \"sk-...\"` — uses GPT-4o-mini (~$0.15/1M tokens)  \n"
+        "- `GEMINI_API_KEY = \"AQ....\"` — uses Gemini 2.0 Flash (free tier)  \n\n"
+        "OpenAI is recommended for reliability."
     )
     st.stop()
 
+_provider_label = "OpenAI GPT-4o-mini" if _openai_key else "Google Gemini 2.0 Flash"
+
+st.caption(f"🤖 AI engine: **{_provider_label}**")
 st.markdown("---")
 
 # ── INPUT FORM ────────────────────────────────────────────────────────────────
