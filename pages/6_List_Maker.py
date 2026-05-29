@@ -14,15 +14,17 @@ show_logo()
 show_user_bar()
 
 st.title("🕷️ List Maker")
-st.markdown("Paste any exhibitor list URL — Claude reads the page and returns a downloadable Excel sheet.")
+st.markdown("Paste any exhibitor list URL — Gemini reads the page and returns a downloadable Excel sheet.")
 
 # ── API key check ─────────────────────────────────────────────────────────────
-api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+api_key = st.secrets.get("GEMINI_API_KEY", "")
 if not api_key:
     st.error(
-        "**Claude API key not configured.** "
-        "Add `ANTHROPIC_API_KEY` to your Streamlit Cloud secrets to enable this feature.  \n"
-        "Get a free key at [console.anthropic.com](https://console.anthropic.com)."
+        "**Gemini API key not configured.**  \n"
+        "1. Go to [aistudio.google.com](https://aistudio.google.com) → **Get API key**  \n"
+        "2. Copy the key  \n"
+        "3. Add it to Streamlit Cloud secrets as: `GEMINI_API_KEY = \"your-key-here\"`  \n\n"
+        "_Gemini 1.5 Flash is completely free (15 requests/min, 1M tokens/day)._"
     )
     st.stop()
 

@@ -4,7 +4,8 @@ Scraper utilities for the ATK List Maker page.
 Architecture:
   1. Jina.ai Reader API (r.jina.ai) — free, handles JS/React pages, infinite scroll.
      Returns clean markdown from any URL. No API key needed.
-  2. Claude API (claude-3-5-haiku) — cheap, fast extraction of structured data from text.
+  2. Gemini 1.5 Flash (FREE via Google AI Studio) — extracts structured data from text.
+     1M token context window — handles even the largest exhibitor lists.
   3. Jina.ai Search (s.jina.ai) — free website URL enrichment.
 """
 
@@ -100,30 +101,35 @@ PAGE CONTENT (truncated to first 60 000 chars):
 
 def extract_exhibitors(content: str, url: str, instructions: str, api_key: str) -> tuple:
     """
-    Use Claude Haiku to extract structured exhibitor data from page text.
+    Use Gemini 1.5 Flash (free) to extract structured exhibitor data from page text.
     Returns (list_of_dicts, error_str, has_more_pages_hint).
     """
     try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=api_key)
+        import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=_EXTRACTION_SYSTEM,
+        )
 
         prompt = _EXTRACTION_PROMPT.format(
             url=url,
             instructions=instructions.strip() if instructions else "None provided.",
-            content=content[:60_000],
+            content=content[:200_000],   # Gemini Flash handles up to 1M tokens
         )
-        msg = client.messages.create(
-            model="claude-3-5-haiku-20241022",
-            max_tokens=8192,
-            system=_EXTRACTION_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = msg.content[0].text.strip()
+
+        response = model.generate_content(prompt)
+        raw = response.text.strip()
+
+        # Strip markdown code fences if Gemini wrapped the JSON
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
 
         # Extract JSON array from response
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if not match:
-            return [], f"Claude returned unexpected format: {raw[:300]}", False
+            return [], f"Gemini returned unexpected format: {raw[:300]}", False
 
         data = json.loads(match.group())
 
