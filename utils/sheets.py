@@ -279,25 +279,20 @@ def _get_or_create_event_spreadsheet(event_name: str, event_date: str = "",
             except Exception:
                 pass  # Fall through — recreate if missing
 
-    # ── Create via Sheets API (avoids Drive API dependency) ──
+    # ── Create new standalone spreadsheet (Drive API is enabled) ──
     try:
         title = f"ATK — {event_name} Exhibitors"
-        r = client.request(
-            "post",
-            "https://sheets.googleapis.com/v4/spreadsheets",
-            json={"properties": {"title": title}},
-        )
-        ss = gspread.Spreadsheet(client, r.json())
+        ss = client.create(title)
     except Exception as create_err:
         raise RuntimeError(f"[CREATE] {create_err}") from create_err
 
-    # ── Share: anyone with the link can edit (requires Drive API — non-fatal) ──
+    # ── Share: anyone with the link can edit ──
     try:
         ss.share(None, perm_type="anyone", role="writer", notify=False)
-    except Exception:
-        pass  # Upload still works; sharing can be enabled via Drive API later
+    except Exception as share_err:
+        pass  # Non-fatal — spreadsheet still accessible to those with the URL
 
-    # ── Set up header row ──
+    # ── Set up header row and register ──
     try:
         ws = ss.sheet1
         ws.update_title("Exhibitors")
