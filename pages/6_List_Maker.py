@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from utils.scraper import (
     fetch_page, find_next_page_url, extract_exhibitors,
-    enrich_missing_websites, rows_to_df, df_to_excel_bytes,
+    enrich_missing_websites, enrich_detail_pages, rows_to_df, df_to_excel_bytes,
 )
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar
@@ -64,16 +64,27 @@ instructions = st.text_area(
     key="lm_notes",
 )
 
-col_enrich, col_warn = st.columns([1, 2])
+col_enrich, col_detail, col_warn = st.columns([1, 1, 1])
 with col_enrich:
     do_enrich = st.checkbox(
         "🔍 Search for missing website URLs",
         help="For companies without a website listed, Jina.ai search finds the official site. ~3 sec per company.",
         key="lm_enrich",
     )
+with col_detail:
+    do_detail = st.checkbox(
+        "🔗 Follow company pages for contact info",
+        help=(
+            "Fetches each company's individual profile page to get email, phone, website and country. "
+            "Uses 15 concurrent requests. ~1 min per 200 companies."
+        ),
+        key="lm_detail",
+    )
 with col_warn:
-    if do_enrich:
-        st.caption("⏱️ Adds ~3 seconds per company with a missing website. For large lists (200+), run without this first, then enrich a filtered subset.")
+    if do_detail:
+        st.caption("⏱️ ~1 min per 200 companies. For large shows (2,000+ exhibitors) expect 10–15 min.")
+    elif do_enrich:
+        st.caption("⏱️ ~3 sec per company with a missing website.")
 
 st.markdown("---")
 
@@ -164,6 +175,39 @@ if st.button("🕷️  Scrape & Extract", type="primary", disabled=not url):
         duplicates_removed = len(all_rows) - len(deduped)
         if duplicates_removed:
             st.write(f"🧹 Removed {duplicates_removed} duplicates → **{len(deduped)} unique companies**")
+
+        # ── Detail page enrichment ───────────────────────────────────────────
+        if do_detail and deduped:
+            detail_count = sum(
+                1 for r in deduped if r.get("detail_url", "").strip().startswith("http")
+            )
+            if detail_count:
+                st.write(f"🔗 Fetching {detail_count} company detail pages (15 concurrent)…")
+                detail_placeholder = st.empty()
+                detail_bar = st.progress(0.0)
+
+                from urllib.parse import urlparse
+                site_domain = urlparse(base_url).netloc
+
+                def _detail_cb(done, total, name):
+                    detail_placeholder.caption(f"   ✓ {done}/{total} — {name}")
+                    detail_bar.progress(done / total)
+
+                deduped = enrich_detail_pages(
+                    deduped, api_key,
+                    site_domain=site_domain,
+                    progress_callback=_detail_cb,
+                )
+                detail_placeholder.empty()
+                detail_bar.empty()
+
+                emails_found = sum(1 for r in deduped if r.get("email"))
+                webs_found   = sum(1 for r in deduped if r.get("website"))
+                st.write(f"   ✅ Detail enrichment done — "
+                         f"**{emails_found} emails**, **{webs_found} websites** found")
+            else:
+                st.write("   ℹ️ No detail page URLs found in the listing. "
+                         "Add a note above describing that company names are clickable links.")
 
         # ── Website enrichment ────────────────────────────────────────────────
         if do_enrich and deduped:
