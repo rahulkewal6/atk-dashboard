@@ -16,11 +16,11 @@ SHEET_NAME = "ATK Dashboard"
 @st.cache_resource
 def get_client():
     try:
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"], scopes=SCOPES
+        return gspread.service_account_from_dict(
+            dict(st.secrets["gcp_service_account"]),
+            scopes=SCOPES,
         )
-        return gspread.authorize(creds)
-    except Exception as e:
+    except Exception:
         return None
 
 
