@@ -109,6 +109,19 @@ CALL_STATUSES = [
     "Do Not Contact",
 ]
 
+TASK_HEADERS = [
+    "Task ID", "Title", "Assigned To", "Priority", "Status",
+    "Due Date", "Notes", "Source", "Source Company", "Created By", "Created Date",
+]
+
+FOLLOWUP_HEADERS = [
+    "Follow-up ID", "Company Name", "Exhibition", "Stage at Time",
+    "Follow-up Date", "Assigned To", "Notes", "Status", "Created By", "Created Date",
+]
+
+TASK_PRIORITIES = ["High", "Medium", "Low"]
+TASK_STATUSES   = ["Pending", "In Progress", "Done"]
+
 CALENDAR_HEADERS = [
     "Event Name", "Venue", "City", "Start Date", "End Date",
     "Exhibitor Count", "Official URL", "Verification Status",

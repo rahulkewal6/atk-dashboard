@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from utils.sheets import get_pipeline_df, add_lead, update_lead_field, log_stage_change, get_stage_history
+from datetime import date
+from utils.sheets import get_pipeline_df, add_lead, update_lead_field, log_stage_change, get_stage_history, add_followup, get_due_count
 from utils.constants import PIPELINE_STAGES, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
@@ -53,6 +54,11 @@ def _stage_pill(stage: str) -> str:
 
 st.title("🔴 Leads")
 st.markdown("All active leads and their current stages.")
+
+# Sidebar notification badge for due follow-ups
+_due = get_due_count()
+if _due:
+    st.sidebar.error(f"🔔 {_due} follow-up{'s' if _due > 1 else ''} due — check Tasks")
 
 # ── Add New Lead ──────────────────────────────────────────────────────────────
 with st.expander("➕ Add New Lead"):
@@ -270,6 +276,35 @@ for idx, row in filtered.iterrows():
                         log_stage_change(company, new_stage, updated_by, new_notes)
                         st.success("Saved!")
                         st.rerun()
+
+        # ── Add to Follow-up ─────────────────────────────────────────────────
+        st.markdown("---")
+        with st.expander("📅 Add to Follow-up"):
+            with st.form(f"followup_{idx}"):
+                fa, fb, fc_col = st.columns([2, 2, 3])
+                with fa:
+                    fu_date = st.date_input("Follow-up Date", value=date.today(),
+                                            key=f"fu_date_{idx}")
+                with fb:
+                    fu_user = st.selectbox("Assign To", USERS, key=f"fu_user_{idx}")
+                with fc_col:
+                    fu_notes = st.text_input("Notes", placeholder="e.g. Follow up on quotation",
+                                             key=f"fu_notes_{idx}")
+                if st.form_submit_button("📅 Save Follow-up", type="primary"):
+                    ok = add_followup({
+                        "company_name":  company,
+                        "exhibition":    exhibition,
+                        "stage_at_time": stage,
+                        "followup_date": fu_date.strftime("%d-%b-%Y"),
+                        "assigned_to":   fu_user,
+                        "notes":         fu_notes,
+                        "created_by":    fu_user,
+                    })
+                    if ok:
+                        st.success(f"✅ Follow-up set for {fu_date.strftime('%d %b %Y')} — will appear in Tasks when due.")
+                        get_due_count.clear()
+                    else:
+                        st.error("Could not save. Check Google Sheets connection.")
 
         # ── Stage history (collapsed by default) ─────────────────────────────
         st.markdown("---")

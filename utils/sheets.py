@@ -3,7 +3,7 @@ import gspread
 import pandas as pd
 import streamlit as st
 from datetime import datetime
-from utils.constants import EXHIBITOR_HEADERS
+from utils.constants import EXHIBITOR_HEADERS, TASK_HEADERS, FOLLOWUP_HEADERS
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -492,6 +492,148 @@ def update_call_status(event_name: str, company_name: str, status: str,
         return False
     except Exception:
         return False
+
+
+# ── Tasks & Follow-ups ────────────────────────────────────────────────────────
+
+def _get_or_create_tab(tab_name: str, headers: list):
+    """Get or create a worksheet tab in the main ATK Dashboard spreadsheet."""
+    sheet = get_sheet()
+    if not sheet:
+        return None
+    try:
+        return sheet.worksheet(tab_name)
+    except gspread.exceptions.WorksheetNotFound:
+        try:
+            ws = sheet.add_worksheet(title=tab_name, rows=1000, cols=len(headers))
+            ws.append_row(headers)
+            return ws
+        except Exception:
+            return None
+
+
+def get_tasks_df() -> pd.DataFrame:
+    ws = _get_or_create_tab("ATK Tasks", TASK_HEADERS)
+    if not ws:
+        return pd.DataFrame(columns=TASK_HEADERS)
+    try:
+        data = ws.get_all_records()
+        return pd.DataFrame(data) if data else pd.DataFrame(columns=TASK_HEADERS)
+    except Exception:
+        return pd.DataFrame(columns=TASK_HEADERS)
+
+
+def add_task(data: dict) -> bool:
+    ws = _get_or_create_tab("ATK Tasks", TASK_HEADERS)
+    if not ws:
+        return False
+    try:
+        ws.append_row([
+            datetime.now().strftime("%Y%m%d%H%M%S"),
+            data.get("title", ""),
+            data.get("assigned_to", ""),
+            data.get("priority", "Medium"),
+            "Pending",
+            data.get("due_date", ""),
+            data.get("notes", ""),
+            data.get("source", "Manual"),
+            data.get("source_company", ""),
+            data.get("created_by", ""),
+            datetime.now().strftime("%d-%b-%Y"),
+        ])
+        get_due_count.clear()
+        return True
+    except Exception:
+        return False
+
+
+def update_task(row_num: int, field: str, value) -> bool:
+    ws = _get_or_create_tab("ATK Tasks", TASK_HEADERS)
+    if not ws:
+        return False
+    try:
+        headers = ws.row_values(1)
+        if field not in headers:
+            return False
+        ws.update_cell(row_num + 1, headers.index(field) + 1, value)
+        get_due_count.clear()
+        return True
+    except Exception:
+        return False
+
+
+def get_followups_df() -> pd.DataFrame:
+    ws = _get_or_create_tab("ATK Followups", FOLLOWUP_HEADERS)
+    if not ws:
+        return pd.DataFrame(columns=FOLLOWUP_HEADERS)
+    try:
+        data = ws.get_all_records()
+        return pd.DataFrame(data) if data else pd.DataFrame(columns=FOLLOWUP_HEADERS)
+    except Exception:
+        return pd.DataFrame(columns=FOLLOWUP_HEADERS)
+
+
+def add_followup(data: dict) -> bool:
+    ws = _get_or_create_tab("ATK Followups", FOLLOWUP_HEADERS)
+    if not ws:
+        return False
+    try:
+        ws.append_row([
+            datetime.now().strftime("%Y%m%d%H%M%S"),
+            data.get("company_name", ""),
+            data.get("exhibition", ""),
+            data.get("stage_at_time", ""),
+            data.get("followup_date", ""),
+            data.get("assigned_to", ""),
+            data.get("notes", ""),
+            "Pending",
+            data.get("created_by", ""),
+            datetime.now().strftime("%d-%b-%Y"),
+        ])
+        get_due_count.clear()
+        return True
+    except Exception:
+        return False
+
+
+def update_followup_status(row_num: int, status: str) -> bool:
+    ws = _get_or_create_tab("ATK Followups", FOLLOWUP_HEADERS)
+    if not ws:
+        return False
+    try:
+        headers = ws.row_values(1)
+        col = headers.index("Status") + 1
+        ws.update_cell(row_num + 1, col, status)
+        get_due_count.clear()
+        return True
+    except Exception:
+        return False
+
+
+@st.cache_data(ttl=120)
+def get_due_followups() -> list:
+    """Return follow-ups where date <= today and status = Pending."""
+    df = get_followups_df()
+    if df.empty or "Follow-up Date" not in df.columns:
+        return []
+    today = datetime.now().date()
+    due = []
+    for idx, row in df.iterrows():
+        if str(row.get("Status", "")) == "Done":
+            continue
+        try:
+            fu_date = pd.to_datetime(row["Follow-up Date"], dayfirst=True).date()
+            if fu_date <= today:
+                due.append({"_row_idx": idx, **row.to_dict()})
+        except Exception:
+            continue
+    return due
+
+
+@st.cache_data(ttl=120)
+def get_due_count() -> int:
+    """Cached count of due follow-ups — used for notification badge."""
+    return len(get_due_followups())
 
 
 def delete_event_exhibitors(event_name: str) -> bool:
