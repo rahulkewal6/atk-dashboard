@@ -17,7 +17,19 @@ _PENDING_STAGES = {
     "Info Request Replied",
     "Waiting for Design Feedback", "Waiting for Final Approval",
     "No Response — Follow Up Later", "Client Requested Discount",
-    "Additional Changes Requested",
+    "Additional Changes Requested", "New Brief Received (Client Changed)",
+}
+
+# Stages where work is actively progressing — shown in green
+_ACTIVE_STAGES = {
+    "Brief Received (v1)", "Brief Received (v2)", "Brief Received (v3)",
+    "Brief Sent to Designer",
+    "Design Option 1 Sent", "Design Option 2 Sent", "Design Option 3 Sent",
+    "Revised Brief Sent to Designer",
+    "Brief Sent to Vendor", "Vendor Quotation Received",
+    "Client Quotation Prepared", "Client Quotation 1 Sent",
+    "Discounted Quotation Sent", "Revised Quotation Sent",
+    "Waiting for Final Approval",
 }
 
 def _stage_pill(stage: str) -> str:
@@ -27,7 +39,9 @@ def _stage_pill(stage: str) -> str:
     elif stage == "Won":
         color, bg = "#1a7a3f", "#e8f8ed"
     elif stage == "Lost":
-        color, bg = "#777", "#f2f2f2"
+        color, bg = "#777", "#f0f0f0"
+    elif stage in _ACTIVE_STAGES:
+        color, bg = "#1a7a3f", "#e8f8ed"
     else:
         color, bg = "#b35c00", "#fff3e6"
     return (
@@ -128,11 +142,29 @@ for idx, row in filtered.iterrows():
     company    = str(row.get("Company Name", "Unknown"))
     exhibition = str(row.get("Exhibition", ""))
 
-    dot = "🔴" if is_pending else ("✅" if stage == "Won" else ("❌" if stage == "Lost" else "▪️"))
+    is_active = stage in _ACTIVE_STAGES
+    dot = "🔴" if is_pending else ("🟢" if is_active else ("✅" if stage == "Won" else ("❌" if stage == "Lost" else "▪️")))
 
-    with st.expander(f"{dot}  {company}  —  {exhibition}"):
+    with st.expander(f"{dot}  {company}  —  {exhibition}  ·  {stage}"):
 
-        # Stage pill
+        # ── Quick stage update bar ────────────────────────────────────────────
+        with st.form(f"quick_{idx}"):
+            qc1, qc2, qc3 = st.columns([4, 2, 1])
+            with qc1:
+                q_stage = st.selectbox(
+                    "Stage", PIPELINE_STAGES,
+                    index=PIPELINE_STAGES.index(stage) if stage in PIPELINE_STAGES else 0,
+                    label_visibility="collapsed",
+                )
+            with qc2:
+                q_user = st.selectbox("By", USERS, label_visibility="collapsed")
+            with qc3:
+                q_save = st.form_submit_button("✓ Update", use_container_width=True, type="primary")
+            if q_save:
+                update_lead_field(idx + 1, "Current Stage", q_stage, q_user)
+                log_stage_change(company, q_stage, q_user, "")
+                st.rerun()
+
         st.markdown(_stage_pill(stage), unsafe_allow_html=True)
         st.write("")
 
