@@ -10,7 +10,6 @@ from utils.constants import EXHIBITIONS, USERS, CALL_STATUSES
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
 
-st.set_page_config(page_title="Database", page_icon="🗄️", layout="wide")
 inject_css()
 require_login()
 show_logo()

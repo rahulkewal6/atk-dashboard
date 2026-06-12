@@ -190,6 +190,26 @@ def inject_css():
             white-space: nowrap;
         }
 
+        /* Clickable stat-card buttons on the Leads page */
+        .st-key-stat_red button, .st-key-stat_yellow button,
+        .st-key-stat_green button, .st-key-stat_won button {
+            background: #14171D !important;
+            border: 1px solid #2A2D34 !important;
+            border-radius: 12px !important;
+            padding: 14px 10px !important;
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+        .st-key-stat_red button    { border-top: 3px solid #FF4D4F !important; color: #FF4D4F !important; }
+        .st-key-stat_yellow button { border-top: 3px solid #FFB020 !important; color: #FFB020 !important; }
+        .st-key-stat_green button  { border-top: 3px solid #2ECC71 !important; color: #2ECC71 !important; }
+        .st-key-stat_won button    { border-top: 3px solid #2ECC71 !important; color: #2ECC71 !important; }
+        .st-key-stat_red button:hover    { background: rgba(255,77,79,0.10)  !important; }
+        .st-key-stat_yellow button:hover { background: rgba(255,176,32,0.10) !important; }
+        .st-key-stat_green button:hover,
+        .st-key-stat_won button:hover    { background: rgba(46,204,113,0.10) !important; }
+
         /* Status summary chips */
         .atk-stats {
             display: flex;

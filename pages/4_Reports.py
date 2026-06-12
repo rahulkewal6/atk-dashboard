@@ -5,7 +5,6 @@ from utils.constants import EXHIBITIONS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar
 
-st.set_page_config(page_title="Reports", page_icon="📈", layout="wide")
 inject_css()
 require_login()
 show_logo()

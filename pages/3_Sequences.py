@@ -4,7 +4,6 @@ from utils.apollo_api import get_sequences, get_sequence_detail, get_mailboxes
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar
 
-st.set_page_config(page_title="Sequences", page_icon="📊", layout="wide")
 inject_css()
 require_login()
 show_logo()

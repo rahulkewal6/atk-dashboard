@@ -44,8 +44,12 @@ rsync -av \
 ---
 
 ## App pages (sidebar order)
+Navigation uses `st.navigation` in `app.py` (the entrypoint/router — do not rename it).
+Pages must NOT call `st.set_page_config` — it is called once in `app.py`.
+
 | File | Page | Notes |
 |------|------|-------|
+| `home.py` | 🏠 Home | Metrics: action needed, designs to send, follow-ups this week, pending tasks |
 | `pages/0_Tasks.py` | 📋 Tasks | Manual tasks + due follow-up notifications |
 | `pages/1_Leads.py` | 🔴 Leads | Pipeline: 3-color tiers, inline stage popover, delete, lead # |
 | `pages/2_Follow_Ups.py` | 📅 Follow Ups | Scheduled follow-ups (from leads or added directly) |

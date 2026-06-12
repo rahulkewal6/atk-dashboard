@@ -9,7 +9,6 @@ from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITION
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
 
-st.set_page_config(page_title="Leads", page_icon="🔴", layout="wide")
 inject_css()
 require_login()
 show_logo()
@@ -96,7 +95,11 @@ if df.empty:
     st.info("No leads yet. Add your first lead above.")
     st.stop()
 
-# ── Status summary strip ──────────────────────────────────────────────────────
+# ── Status summary strip (clickable — filters the list) ──────────────────────
+_STATUS_OPTIONS = ["All", "🔴 Action needed", "🟡 In progress", "🟢 With client", "✅ Won", "❌ Lost"]
+if "lead_status" not in st.session_state:
+    st.session_state["lead_status"] = "All"
+
 if "Current Stage" in df.columns:
     tiers = df["Current Stage"].map(lambda s: _tier(str(s)))
     counts = {
@@ -105,25 +108,29 @@ if "Current Stage" in df.columns:
         "green":  int((tiers == "green").sum()),
         "won":    int((tiers == "won").sum()),
     }
-    st.markdown(
-        '<div class="atk-stats">'
-        + "".join(
-            f'<div class="atk-stat" style="border-top:3px solid {TIER_STYLE[t]["color"]};">'
-            f'<div class="n" style="color:{TIER_STYLE[t]["color"]};">{counts[t]}</div>'
-            f'<div class="l">{TIER_STYLE[t]["label"]}</div></div>'
-            for t in ["red", "yellow", "green", "won"]
-        )
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+    _CARD_TO_STATUS = {
+        "red": "🔴 Action needed", "yellow": "🟡 In progress",
+        "green": "🟢 With client", "won": "✅ Won",
+    }
+    sc = st.columns(4)
+    for col, t in zip(sc, ["red", "yellow", "green", "won"]):
+        status_label = _CARD_TO_STATUS[t]
+        selected = st.session_state["lead_status"] == status_label
+        with col:
+            with st.container(key=f"stat_{t}"):
+                if st.button(
+                    f"{counts[t]}  ·  {TIER_STYLE[t]['label']}" + ("  ✕" if selected else ""),
+                    key=f"statbtn_{t}",
+                    use_container_width=True,
+                    help="Click to show only these leads — click again to show all",
+                ):
+                    st.session_state["lead_status"] = "All" if selected else status_label
+                    st.rerun()
 
 # ── Filters ───────────────────────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    filter_status = st.selectbox(
-        "Status",
-        ["All", "🔴 Action needed", "🟡 In progress", "🟢 With client", "✅ Won", "❌ Lost"],
-    )
+    filter_status = st.selectbox("Status", _STATUS_OPTIONS, key="lead_status")
 with c2:
     filter_exhibition = st.multiselect("Exhibition", ["All"] + EXHIBITIONS, default=["All"])
 with c3:
