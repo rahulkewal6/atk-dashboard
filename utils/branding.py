@@ -165,6 +165,13 @@ def inject_css():
             display: inline-block;
             flex: none;
         }
+        .atk-num {
+            color: #6B7280;
+            font-size: 0.82rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-width: 28px;
+        }
         .atk-company {
             font-size: 1.08rem;
             font-weight: 700;

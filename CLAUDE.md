@@ -47,13 +47,13 @@ rsync -av \
 | File | Page | Notes |
 |------|------|-------|
 | `pages/0_Tasks.py` | 📋 Tasks | Manual tasks + due follow-up notifications |
-| `pages/1_Leads.py` | 🔴 Leads | Pipeline with stage management + follow-up button |
-| `pages/1b_Follow_Ups.py` | 📅 Follow Ups | Scheduled follow-ups from leads |
-| `pages/2_Sequences.py` | Sequences | Apollo email sequences |
-| `pages/3_Reports.py` | Reports | Dashboard metrics |
-| `pages/4_Calendar.py` | Calendar | Exhibition event calendar |
-| `pages/5_Database.py` | Database | Exhibitor database (upload + call tracking) |
-| `pages/6_List_Maker.py` | 🕷️ List Maker | AI web scraper → Excel download |
+| `pages/1_Leads.py` | 🔴 Leads | Pipeline: 3-color tiers, inline stage popover, delete, lead # |
+| `pages/2_Follow_Ups.py` | 📅 Follow Ups | Scheduled follow-ups (from leads or added directly) |
+| `pages/3_Sequences.py` | Sequences | Apollo email sequences |
+| `pages/4_Reports.py` | Reports | Dashboard metrics |
+| `pages/5_Calendar.py` | Calendar | Exhibition event calendar |
+| `pages/6_Database.py` | Database | Exhibitor database (upload + call tracking) |
+| `pages/7_List_Maker.py` | 🕷️ List Maker | AI web scraper → Excel download |
 
 ---
 

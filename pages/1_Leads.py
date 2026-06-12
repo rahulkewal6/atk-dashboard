@@ -28,10 +28,11 @@ def _pill(stage: str) -> str:
     )
 
 
-def _lead_header(company: str, exhibition: str, stage: str) -> str:
+def _lead_header(lead_no: int, company: str, exhibition: str, stage: str) -> str:
     s = TIER_STYLE[_tier(stage)]
     return (
         f'<div class="atk-lead-head">'
+        f'<span class="atk-num">#{lead_no}</span>'
         f'<span class="atk-dot" style="background:{s["color"]};box-shadow:0 0 8px {s["color"]}66;"></span>'
         f'<span class="atk-company">{company}</span>'
         f'<span class="atk-exh">{exhibition}</span>'
@@ -180,7 +181,7 @@ for idx, row in filtered.iterrows():
         # ── Header row: name + pill + inline stage updater ───────────────────
         hl, hr = st.columns([4, 1.3])
         with hl:
-            st.markdown(_lead_header(company, exhibition, stage), unsafe_allow_html=True)
+            st.markdown(_lead_header(idx + 1, company, exhibition, stage), unsafe_allow_html=True)
         with hr:
             with st.popover("✏️ Update stage", use_container_width=True):
                 q_stage = st.selectbox(

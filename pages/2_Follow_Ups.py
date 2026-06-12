@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from utils.sheets import get_followups_df, update_followup_status, get_due_followups
-from utils.constants import USERS
+from utils.sheets import (
+    get_followups_df, add_followup, update_followup_status,
+    get_due_followups, get_due_count, get_pipeline_df,
+)
+from utils.constants import USERS, EXHIBITIONS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar
 
@@ -13,7 +16,61 @@ show_logo()
 show_user_bar()
 
 st.title("📅 Follow-ups")
-st.markdown("All follow-ups scheduled from your leads.")
+st.markdown("All scheduled follow-ups — they appear in Tasks automatically when due.")
+
+# ── Add Follow-up ─────────────────────────────────────────────────────────────
+with st.expander("➕ Add Follow-up"):
+    pipeline_df = get_pipeline_df()
+    companies = (
+        sorted(pipeline_df["Company Name"].dropna().astype(str).unique().tolist())
+        if not pipeline_df.empty and "Company Name" in pipeline_df.columns
+        else []
+    )
+    pick = st.selectbox(
+        "Company / Client",
+        ["✏️ Type a new name"] + companies,
+        help="Pick an existing lead, or type any client name (e.g. a cold call).",
+    )
+    with st.form("add_followup_form"):
+        if pick == "✏️ Type a new name":
+            company_in = st.text_input("Client / Company Name *",
+                                       placeholder="e.g. Al Futtaim Group")
+        else:
+            company_in = pick
+            st.caption(f"Company: **{pick}**")
+        a1, a2, a3 = st.columns(3)
+        with a1:
+            fu_date = st.date_input("Follow-up Date *", value=date.today())
+        with a2:
+            fu_user = st.selectbox("Assign To", USERS)
+        with a3:
+            fu_exh = st.selectbox("Exhibition", ["—"] + EXHIBITIONS)
+        fu_notes = st.text_input(
+            "Notes",
+            placeholder="e.g. Cold call — client asked to call back after a week",
+        )
+        if st.form_submit_button("📅 Save Follow-up", type="primary"):
+            if not str(company_in).strip():
+                st.error("Client / company name is required.")
+            else:
+                ok = add_followup({
+                    "company_name":  str(company_in).strip(),
+                    "exhibition":    "" if fu_exh == "—" else fu_exh,
+                    "stage_at_time": "",
+                    "followup_date": fu_date.strftime("%d-%b-%Y"),
+                    "assigned_to":   fu_user,
+                    "notes":         fu_notes,
+                    "created_by":    fu_user,
+                })
+                if ok:
+                    get_due_followups.clear()
+                    get_due_count.clear()
+                    st.success(f"✅ Follow-up saved — it will show in Tasks on {fu_date.strftime('%d %b %Y')}.")
+                    st.rerun()
+                else:
+                    st.error("Could not save. Check Google Sheets connection.")
+
+st.markdown("---")
 
 # ── Filters ───────────────────────────────────────────────────────────────────
 fc1, fc2 = st.columns(2)
