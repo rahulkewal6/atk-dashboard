@@ -126,6 +126,10 @@ for idx, row in df.iterrows():
     label  = f"{s_icon}  {title}"
     if src_co:
         label += f"  ·  {src_co}"
+    if str(assigned).strip():
+        label += f"  ·  👤 {assigned}"
+    if str(due).strip():
+        label += f"  ·  📅 {due}"
 
     with st.expander(label):
         lc, rc = st.columns([3, 1])
