@@ -1,4 +1,5 @@
 import re
+import time
 import gspread
 import pandas as pd
 import streamlit as st
@@ -37,16 +38,45 @@ def get_sheet():
         return None
 
 
-def get_pipeline_df():
-    sheet = get_sheet()
-    if not sheet:
-        return pd.DataFrame()
+# ── Session-level read cache ──────────────────────────────────────────────────
+# Google Sheets allows ~60 reads/min. Without caching, one page load of the
+# Leads page used to fire 20+ API calls (one Stage History read per lead),
+# which tripped the rate limit right after a write and made the lead list
+# flash empty. Reads are cached per browser session for _CACHE_TTL seconds,
+# and on ANY read failure we serve the last good copy instead of a blank page.
+
+_CACHE_TTL = 45
+
+
+def _session_cached_read(cache_key: str, fetch):
+    now = time.time()
+    time_key = cache_key + "_ts"
+    if cache_key in st.session_state and now - st.session_state.get(time_key, 0) < _CACHE_TTL:
+        return st.session_state[cache_key]
     try:
+        df = fetch()
+        st.session_state[cache_key] = df
+        st.session_state[time_key] = now
+        return df
+    except Exception:
+        return st.session_state.get(cache_key, pd.DataFrame())
+
+
+def invalidate_pipeline_cache():
+    for k in ["_atk_pipeline_df", "_atk_pipeline_df_ts",
+              "_atk_history_df", "_atk_history_df_ts"]:
+        st.session_state.pop(k, None)
+
+
+def get_pipeline_df():
+    def fetch():
+        sheet = get_sheet()
+        if not sheet:
+            raise RuntimeError("Google Sheets connection unavailable")
         ws = sheet.worksheet("Pipeline")
         data = ws.get_all_records()
         return pd.DataFrame(data) if data else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return _session_cached_read("_atk_pipeline_df", fetch)
 
 
 def add_lead(data: dict):
@@ -74,6 +104,7 @@ def add_lead(data: dict):
             datetime.now().strftime("%d-%b-%Y"),
         ]
         ws.append_row(row)
+        invalidate_pipeline_cache()
         return True
     except Exception:
         return False
@@ -93,6 +124,7 @@ def update_lead_field(row_number: int, field: str, value, updated_by: str):
         if "Last Updated By" in headers:
             upd_col = headers.index("Last Updated By") + 1
             ws.update_cell(row_number + 1, upd_col, updated_by)
+        invalidate_pipeline_cache()
         return True
     except Exception:
         return False
@@ -117,6 +149,7 @@ def delete_lead(row_number: int, company_name: str) -> bool:
         if str(cell_value or "").strip() != str(company_name).strip():
             return False
         ws.delete_rows(row_number + 1)
+        invalidate_pipeline_cache()
         return True
     except Exception:
         return False
@@ -135,24 +168,24 @@ def log_stage_change(company_name: str, new_stage: str, updated_by: str, notes: 
             datetime.now().strftime("%d-%b-%Y %H:%M"),
             notes,
         ])
+        invalidate_pipeline_cache()
         return True
     except Exception:
         return False
 
 
 def get_stage_history(company_name: str):
-    sheet = get_sheet()
-    if not sheet:
-        return pd.DataFrame()
-    try:
+    def fetch():
+        sheet = get_sheet()
+        if not sheet:
+            raise RuntimeError("Google Sheets connection unavailable")
         ws = sheet.worksheet("Stage History")
         data = ws.get_all_records()
-        if not data:
-            return pd.DataFrame()
-        df = pd.DataFrame(data)
-        return df[df["Company Name"] == company_name]
-    except Exception:
+        return pd.DataFrame(data) if data else pd.DataFrame()
+    df = _session_cached_read("_atk_history_df", fetch)
+    if df.empty or "Company Name" not in df.columns:
         return pd.DataFrame()
+    return df[df["Company Name"] == company_name]
 
 
 def get_calendar_df():
