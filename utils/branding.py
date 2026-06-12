@@ -94,6 +94,122 @@ def inject_css():
         [data-testid="stAlert"] {
             border-left: 4px solid #FF6600 !important;
         }
+
+        /* ════════ Modern UI layer ════════ */
+
+        /* Cleaner system font + rendering */
+        html, body, [data-testid="stAppViewContainer"] * {
+            -webkit-font-smoothing: antialiased;
+        }
+        h1 { font-weight: 800 !important; letter-spacing: -0.02em; }
+        h2, h3 { font-weight: 700 !important; letter-spacing: -0.01em; }
+
+        /* Bordered containers → soft cards */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 14px !important;
+            border: 1px solid #2A2D34 !important;
+            background: #14171D;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+
+        /* Expanders → rounded cards, no harsh borders */
+        [data-testid="stExpander"] {
+            border: 1px solid #2A2D34 !important;
+            border-radius: 12px !important;
+            background: #14171D;
+            margin-bottom: 6px;
+        }
+        [data-testid="stExpander"] summary {
+            border-left: none !important;
+            padding: 10px 14px !important;
+            font-weight: 600;
+        }
+        [data-testid="stExpander"] summary:hover {
+            color: #FF6600 !important;
+        }
+
+        /* Popover trigger → quiet outline button (not orange) */
+        [data-testid="stPopover"] > div > button,
+        [data-testid="stPopover"] button[data-testid^="stPopoverButton"] {
+            background: transparent !important;
+            color: #CCCCCC !important;
+            border: 1px solid #3A3E46 !important;
+            border-radius: 8px !important;
+            font-weight: 500 !important;
+        }
+        [data-testid="stPopover"] > div > button:hover {
+            border-color: #FF6600 !important;
+            color: #FF6600 !important;
+            background: rgba(255,102,0,0.08) !important;
+        }
+
+        /* Inputs → rounded, subtle */
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea,
+        [data-testid="stDateInput"] input,
+        [data-testid="stSelectbox"] > div > div {
+            border-radius: 8px !important;
+        }
+
+        /* Lead card header */
+        .atk-lead-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 4px 0;
+        }
+        .atk-dot {
+            width: 11px; height: 11px;
+            border-radius: 50%;
+            display: inline-block;
+            flex: none;
+        }
+        .atk-company {
+            font-size: 1.08rem;
+            font-weight: 700;
+            color: #FFFFFF;
+        }
+        .atk-exh {
+            color: #8A8F98;
+            font-size: 0.84rem;
+            font-weight: 500;
+        }
+        .atk-pill {
+            padding: 3px 12px;
+            border-radius: 999px;
+            font-size: 0.74rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* Status summary chips */
+        .atk-stats {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 4px 0 14px;
+        }
+        .atk-stat {
+            flex: 1;
+            min-width: 130px;
+            border-radius: 12px;
+            padding: 12px 16px;
+            border: 1px solid #2A2D34;
+            background: #14171D;
+        }
+        .atk-stat .n {
+            font-size: 1.5rem;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+        .atk-stat .l {
+            font-size: 0.76rem;
+            color: #8A8F98;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
         </style>
         """,
         unsafe_allow_html=True,

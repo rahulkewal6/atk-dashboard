@@ -98,6 +98,30 @@ def update_lead_field(row_number: int, field: str, value, updated_by: str):
         return False
 
 
+def delete_lead(row_number: int, company_name: str) -> bool:
+    """
+    Delete a lead row from the Pipeline tab.
+    Verifies the company name in that row matches before deleting,
+    so a stale index can never remove the wrong lead.
+    """
+    sheet = get_sheet()
+    if not sheet:
+        return False
+    try:
+        ws = sheet.worksheet("Pipeline")
+        headers = ws.row_values(1)
+        if "Company Name" not in headers:
+            return False
+        name_col = headers.index("Company Name") + 1
+        cell_value = ws.cell(row_number + 1, name_col).value
+        if str(cell_value or "").strip() != str(company_name).strip():
+            return False
+        ws.delete_rows(row_number + 1)
+        return True
+    except Exception:
+        return False
+
+
 def log_stage_change(company_name: str, new_stage: str, updated_by: str, notes: str = ""):
     sheet = get_sheet()
     if not sheet:

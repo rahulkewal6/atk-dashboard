@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from utils.sheets import get_pipeline_df, add_lead, update_lead_field, log_stage_change, get_stage_history, add_followup, get_due_count
-from utils.constants import PIPELINE_STAGES, EXHIBITIONS, SOURCES, USERS
+from utils.sheets import (
+    get_pipeline_df, add_lead, update_lead_field, delete_lead,
+    log_stage_change, get_stage_history, add_followup, get_due_count,
+)
+from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, is_admin
 
@@ -12,48 +15,33 @@ require_login()
 show_logo()
 show_user_bar()
 
-# Stages where action is needed — shown in red
-_PENDING_STAGES = {
-    "Hot Lead (Apollo)", "Hot Lead (Deepak)", "Hot Lead (Inbound)",
-    "Info Request Replied",
-    "Waiting for Design Feedback", "Waiting for Final Approval",
-    "No Response — Follow Up Later", "Client Requested Discount",
-    "Additional Changes Requested", "New Brief Received (Client Changed)",
-}
 
-# Stages where work is actively progressing — shown in green
-_ACTIVE_STAGES = {
-    "Brief Received (v1)", "Brief Received (v2)", "Brief Received (v3)",
-    "Brief Sent to Designer",
-    "Design Option 1 Sent", "Design Option 2 Sent", "Design Option 3 Sent",
-    "Revised Brief Sent to Designer",
-    "Brief Sent to Vendor", "Vendor Quotation Received",
-    "Client Quotation Prepared", "Client Quotation 1 Sent",
-    "Discounted Quotation Sent", "Revised Quotation Sent",
-    "Waiting for Final Approval",
-}
+def _tier(stage: str) -> str:
+    return STAGE_TIERS.get(stage, "yellow")
 
-def _stage_pill(stage: str) -> str:
-    """Coloured HTML pill for the current stage."""
-    if stage in _PENDING_STAGES:
-        color, bg = "#c0392b", "#fdecea"
-    elif stage == "Won":
-        color, bg = "#1a7a3f", "#e8f8ed"
-    elif stage == "Lost":
-        color, bg = "#777", "#f0f0f0"
-    elif stage in _ACTIVE_STAGES:
-        color, bg = "#1a7a3f", "#e8f8ed"
-    else:
-        color, bg = "#b35c00", "#fff3e6"
+
+def _pill(stage: str) -> str:
+    s = TIER_STYLE[_tier(stage)]
     return (
-        f'<span style="background:{bg};color:{color};padding:3px 12px;'
-        f'border-radius:12px;font-size:0.8em;font-weight:600;'
-        f'border:1px solid {color}40;">{stage}</span>'
+        f'<span class="atk-pill" style="background:{s["bg"]};color:{s["color"]};'
+        f'border:1px solid {s["color"]}55;">{stage}</span>'
     )
 
 
-st.title("🔴 Leads")
-st.markdown("All active leads and their current stages.")
+def _lead_header(company: str, exhibition: str, stage: str) -> str:
+    s = TIER_STYLE[_tier(stage)]
+    return (
+        f'<div class="atk-lead-head">'
+        f'<span class="atk-dot" style="background:{s["color"]};box-shadow:0 0 8px {s["color"]}66;"></span>'
+        f'<span class="atk-company">{company}</span>'
+        f'<span class="atk-exh">{exhibition}</span>'
+        f'{_pill(stage)}'
+        f'</div>'
+    )
+
+
+st.title("Leads")
+st.caption("Your pipeline at a glance — 🔴 action needed from us · 🟡 in progress · 🟢 with the client")
 
 # Sidebar notification badge for due follow-ups
 _due = get_due_count()
@@ -101,24 +89,55 @@ with st.expander("➕ Add New Lead"):
                 else:
                     st.error("Could not save. Check Google Sheets connection.")
 
-st.markdown("---")
-
-# ── Filters ───────────────────────────────────────────────────────────────────
-c1, c2, c3 = st.columns(3)
-with c1:
-    filter_exhibition = st.multiselect("Exhibition", ["All"] + EXHIBITIONS, default=["All"])
-with c2:
-    filter_source = st.multiselect("Source", ["All"] + SOURCES, default=["All"])
-with c3:
-    filter_stage = st.multiselect("Stage", ["All"] + PIPELINE_STAGES, default=["All"])
-
-# ── Load & filter ─────────────────────────────────────────────────────────────
+# ── Load data ─────────────────────────────────────────────────────────────────
 df = get_pipeline_df()
 if df.empty:
     st.info("No leads yet. Add your first lead above.")
     st.stop()
 
+# ── Status summary strip ──────────────────────────────────────────────────────
+if "Current Stage" in df.columns:
+    tiers = df["Current Stage"].map(lambda s: _tier(str(s)))
+    counts = {
+        "red":    int((tiers == "red").sum()),
+        "yellow": int((tiers == "yellow").sum()),
+        "green":  int((tiers == "green").sum()),
+        "won":    int((tiers == "won").sum()),
+    }
+    st.markdown(
+        '<div class="atk-stats">'
+        + "".join(
+            f'<div class="atk-stat" style="border-top:3px solid {TIER_STYLE[t]["color"]};">'
+            f'<div class="n" style="color:{TIER_STYLE[t]["color"]};">{counts[t]}</div>'
+            f'<div class="l">{TIER_STYLE[t]["label"]}</div></div>'
+            for t in ["red", "yellow", "green", "won"]
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+# ── Filters ───────────────────────────────────────────────────────────────────
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    filter_status = st.selectbox(
+        "Status",
+        ["All", "🔴 Action needed", "🟡 In progress", "🟢 With client", "✅ Won", "❌ Lost"],
+    )
+with c2:
+    filter_exhibition = st.multiselect("Exhibition", ["All"] + EXHIBITIONS, default=["All"])
+with c3:
+    filter_source = st.multiselect("Source", ["All"] + SOURCES, default=["All"])
+with c4:
+    filter_stage = st.multiselect("Stage", ["All"] + PIPELINE_STAGES, default=["All"])
+
 filtered = df.copy()
+_STATUS_TO_TIER = {
+    "🔴 Action needed": "red", "🟡 In progress": "yellow",
+    "🟢 With client": "green", "✅ Won": "won", "❌ Lost": "lost",
+}
+if filter_status != "All" and "Current Stage" in filtered.columns:
+    want = _STATUS_TO_TIER[filter_status]
+    filtered = filtered[filtered["Current Stage"].map(lambda s: _tier(str(s))) == want]
 if "All" not in filter_exhibition and "Exhibition" in filtered.columns:
     filtered = filtered[filtered["Exhibition"].isin(filter_exhibition)]
 if "All" not in filter_source and "Source" in filtered.columns:
@@ -127,13 +146,15 @@ if "All" not in filter_stage and "Current Stage" in filtered.columns:
     filtered = filtered[filtered["Current Stage"].isin(filter_stage)]
 
 # Header with attention counter
-pending_count = int(filtered["Current Stage"].isin(_PENDING_STAGES).sum()) if "Current Stage" in filtered.columns else 0
+pending_count = 0
+if "Current Stage" in filtered.columns:
+    pending_count = int((filtered["Current Stage"].map(lambda s: _tier(str(s))) == "red").sum())
 hc1, hc2 = st.columns([3, 1])
 hc1.markdown(f"**{len(filtered)} lead(s)**")
 if pending_count:
     hc2.markdown(
-        f'<p style="color:#c0392b;font-weight:700;text-align:right;margin:0;">'
-        f'⚠️ {pending_count} need attention</p>',
+        f'<p style="color:#FF4D4F;font-weight:700;text-align:right;margin:0;">'
+        f'{pending_count} need your action</p>',
         unsafe_allow_html=True,
     )
 
@@ -141,83 +162,117 @@ if filtered.empty:
     st.info("No leads match the current filters.")
     st.stop()
 
+# Sort: action-needed first, then in-progress, then with-client
+_TIER_ORDER = {"red": 0, "yellow": 1, "green": 2, "won": 3, "lost": 4}
+if "Current Stage" in filtered.columns:
+    filtered = filtered.copy()
+    filtered["_tier_sort"] = filtered["Current Stage"].map(lambda s: _TIER_ORDER.get(_tier(str(s)), 1))
+    filtered = filtered.sort_values("_tier_sort", kind="stable").drop(columns=["_tier_sort"])
+
 # ── Lead cards ────────────────────────────────────────────────────────────────
 for idx, row in filtered.iterrows():
     stage      = str(row.get("Current Stage", ""))
-    is_pending = stage in _PENDING_STAGES
     company    = str(row.get("Company Name", "Unknown"))
     exhibition = str(row.get("Exhibition", ""))
 
-    is_active = stage in _ACTIVE_STAGES
-    dot = "🔴" if is_pending else ("🟢" if is_active else ("✅" if stage == "Won" else ("❌" if stage == "Lost" else "▪️")))
+    with st.container(border=True):
 
-    with st.expander(f"{dot}  {company}  —  {exhibition}  ·  {stage}"):
-
-        # ── Quick stage update bar ────────────────────────────────────────────
-        with st.form(f"quick_{idx}"):
-            qc1, qc2, qc3 = st.columns([4, 2, 1])
-            with qc1:
+        # ── Header row: name + pill + inline stage updater ───────────────────
+        hl, hr = st.columns([4, 1.3])
+        with hl:
+            st.markdown(_lead_header(company, exhibition, stage), unsafe_allow_html=True)
+        with hr:
+            with st.popover("✏️ Update stage", use_container_width=True):
                 q_stage = st.selectbox(
-                    "Stage", PIPELINE_STAGES,
+                    "New stage", PIPELINE_STAGES,
                     index=PIPELINE_STAGES.index(stage) if stage in PIPELINE_STAGES else 0,
-                    label_visibility="collapsed",
+                    key=f"qstage_{idx}",
                 )
-            with qc2:
-                q_user = st.selectbox("By", USERS, label_visibility="collapsed")
-            with qc3:
-                q_save = st.form_submit_button("✓ Update", use_container_width=True, type="primary")
-            if q_save:
-                update_lead_field(idx + 1, "Current Stage", q_stage, q_user)
-                log_stage_change(company, q_stage, q_user, "")
-                st.rerun()
+                q_user = st.selectbox("Updated by", USERS, key=f"quser_{idx}")
+                if st.button("✓ Save", key=f"qsave_{idx}", type="primary", use_container_width=True):
+                    update_lead_field(idx + 1, "Current Stage", q_stage, q_user)
+                    log_stage_change(company, q_stage, q_user, "")
+                    st.rerun()
 
-        st.markdown(_stage_pill(stage), unsafe_allow_html=True)
-        st.write("")
+        # ── Details ───────────────────────────────────────────────────────────
+        with st.expander("Details, follow-up & history"):
 
-        col_left, col_right = st.columns([3, 2])
+            col_left, col_right = st.columns([3, 2])
 
-        # ── Left: lead info ──────────────────────────────────────────────────
-        with col_left:
-            src          = row.get("Source", "")
-            date_added   = row.get("Date Added", "")
-            last_updated = row.get("Last Updated By", "")
-            st.caption(f"📋 {src}  ·  Added {date_added}  ·  Updated by {last_updated}")
+            with col_left:
+                src          = row.get("Source", "")
+                date_added   = row.get("Date Added", "")
+                last_updated = row.get("Last Updated By", "")
+                st.caption(f"📋 {src}  ·  Added {date_added}  ·  Updated by {last_updated}")
 
-            phone = str(row.get("Contact Phone", "") or "")
-            email = str(row.get("Contact Email", "") or "")
-            name  = str(row.get("Contact Name",  "") or "")
-            parts = [p for p in [name, email, phone] if p]
-            st.markdown(f"**Contact:** {'  ·  '.join(parts) if parts else '—'}")
+                phone = str(row.get("Contact Phone", "") or "")
+                email = str(row.get("Contact Email", "") or "")
+                name  = str(row.get("Contact Name",  "") or "")
+                parts = [p for p in [name, email, phone] if p]
+                st.markdown(f"**Contact:** {'  ·  '.join(parts) if parts else '—'}")
 
-            try:
-                design_count = int(row.get("Design Options Sent", 0) or 0)
-            except (ValueError, TypeError):
-                design_count = 0
-            design_icons = " ".join(["✅" if i < design_count else "⬜" for i in range(3)])
-            st.markdown(f"**Design Options Sent:** {design_icons}")
+                try:
+                    design_count = int(row.get("Design Options Sent", 0) or 0)
+                except (ValueError, TypeError):
+                    design_count = 0
+                design_icons = " ".join(["✅" if i < design_count else "⬜" for i in range(3)])
+                st.markdown(f"**Design Options Sent:** {design_icons}")
 
-            vendor_q = row.get("Vendor Quote (AED)", "")
-            margin   = row.get("Margin (AED)", "")
-            client_q = row.get("Client Quote (AED)", "")
-            discount = row.get("Discount Given", "No")
+                vendor_q = row.get("Vendor Quote (AED)", "")
+                margin   = row.get("Margin (AED)", "")
+                client_q = row.get("Client Quote (AED)", "")
+                discount = row.get("Discount Given", "No")
 
-            if any([vendor_q, margin, client_q]):
+                if any([vendor_q, margin, client_q]):
+                    st.markdown("---")
+                    if is_admin():
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Vendor Quote",  f"AED {vendor_q}" if vendor_q else "—")
+                        m2.metric("Margin",        f"AED {margin}"   if margin   else "—")
+                        m3.metric("Client Quote",  f"AED {client_q}" if client_q else "—")
+                    else:
+                        st.metric("Client Quote", f"AED {client_q}" if client_q else "—")
+                    if discount == "Yes":
+                        st.caption("🏷️ Discount applied")
+
+                # ── Add to Follow-up ──────────────────────────────────────────
                 st.markdown("---")
-                if is_admin():
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Vendor Quote",  f"AED {vendor_q}" if vendor_q else "—")
-                    m2.metric("Margin",        f"AED {margin}"   if margin   else "—")
-                    m3.metric("Client Quote",  f"AED {client_q}" if client_q else "—")
-                else:
-                    st.metric("Client Quote", f"AED {client_q}" if client_q else "—")
-                if discount == "Yes":
-                    st.caption("🏷️ Discount applied")
+                with st.form(f"followup_{idx}"):
+                    st.markdown("**📅 Add to Follow-up**")
+                    fa, fb = st.columns(2)
+                    with fa:
+                        fu_date = st.date_input("Follow-up Date", value=date.today(),
+                                                key=f"fu_date_{idx}")
+                    with fb:
+                        fu_user = st.selectbox("Assign To", USERS, key=f"fu_user_{idx}")
+                    fu_notes = st.text_input("Notes", placeholder="e.g. Follow up on quotation",
+                                             key=f"fu_notes_{idx}")
+                    if st.form_submit_button("Save Follow-up", type="primary"):
+                        ok = add_followup({
+                            "company_name":  company,
+                            "exhibition":    exhibition,
+                            "stage_at_time": stage,
+                            "followup_date": fu_date.strftime("%d-%b-%Y"),
+                            "assigned_to":   fu_user,
+                            "notes":         fu_notes,
+                            "created_by":    fu_user,
+                        })
+                        if ok:
+                            st.success(f"✅ Follow-up set for {fu_date.strftime('%d %b %Y')} — will appear in Tasks when due.")
+                            get_due_count.clear()
+                        else:
+                            st.error("Could not save. Check Google Sheets connection.")
 
-        # ── Right: update form ───────────────────────────────────────────────
-        with col_right:
-            with st.container(border=True):
+            # ── Right: full update form ───────────────────────────────────────
+            with col_right:
+                vendor_q = row.get("Vendor Quote (AED)", "")
+                margin   = row.get("Margin (AED)", "")
+                client_q = row.get("Client Quote (AED)", "")
+                discount = row.get("Discount Given", "No")
+                phone    = str(row.get("Contact Phone", "") or "")
+
                 with st.form(f"form_{idx}"):
-                    st.markdown("##### Update Lead")
+                    st.markdown("**Update Lead**")
 
                     new_stage = st.selectbox(
                         "Stage",
@@ -225,8 +280,6 @@ for idx, row in filtered.iterrows():
                         index=PIPELINE_STAGES.index(stage) if stage in PIPELINE_STAGES else 0,
                     )
                     updated_by = st.selectbox("Updated by", USERS)
-
-                    st.divider()
 
                     fc1, fc2 = st.columns(2)
                     with fc1:
@@ -246,7 +299,6 @@ for idx, row in filtered.iterrows():
                     new_vendor_q = str(vendor_q)
                     new_margin   = str(margin)
                     if show_quote:
-                        st.divider()
                         st.caption("Quotation")
                         if is_admin():
                             new_vendor_q = st.text_input("Vendor Quote (AED)", value=str(vendor_q))
@@ -277,42 +329,23 @@ for idx, row in filtered.iterrows():
                         st.success("Saved!")
                         st.rerun()
 
-        # ── Add to Follow-up ─────────────────────────────────────────────────
-        st.markdown("---")
-        with st.expander("📅 Add to Follow-up"):
-            with st.form(f"followup_{idx}"):
-                fa, fb, fc_col = st.columns([2, 2, 3])
-                with fa:
-                    fu_date = st.date_input("Follow-up Date", value=date.today(),
-                                            key=f"fu_date_{idx}")
-                with fb:
-                    fu_user = st.selectbox("Assign To", USERS, key=f"fu_user_{idx}")
-                with fc_col:
-                    fu_notes = st.text_input("Notes", placeholder="e.g. Follow up on quotation",
-                                             key=f"fu_notes_{idx}")
-                if st.form_submit_button("📅 Save Follow-up", type="primary"):
-                    ok = add_followup({
-                        "company_name":  company,
-                        "exhibition":    exhibition,
-                        "stage_at_time": stage,
-                        "followup_date": fu_date.strftime("%d-%b-%Y"),
-                        "assigned_to":   fu_user,
-                        "notes":         fu_notes,
-                        "created_by":    fu_user,
-                    })
-                    if ok:
-                        st.success(f"✅ Follow-up set for {fu_date.strftime('%d %b %Y')} — will appear in Tasks when due.")
-                        get_due_count.clear()
-                    else:
-                        st.error("Could not save. Check Google Sheets connection.")
-
-        # ── Stage history (collapsed by default) ─────────────────────────────
-        st.markdown("---")
-        with st.expander("📋 Stage History", expanded=False):
+            # ── Stage history + delete ────────────────────────────────────────
+            st.markdown("---")
             history = get_stage_history(company)
-            if not history.empty:
-                display_cols = [c for c in ["Stage", "Updated By", "Date/Time", "Notes"] if c in history.columns]
-                st.dataframe(history[display_cols].reset_index(drop=True),
-                             use_container_width=True, hide_index=True)
-            else:
-                st.caption("No history logged yet.")
+            hcol, dcol = st.columns([4, 1])
+            with hcol:
+                if not history.empty:
+                    display_cols = [c for c in ["Stage", "Updated By", "Date/Time", "Notes"] if c in history.columns]
+                    st.dataframe(history[display_cols].reset_index(drop=True),
+                                 use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No stage history logged yet.")
+            with dcol:
+                with st.popover("🗑 Delete", use_container_width=True):
+                    st.warning(f"Permanently delete **{company}**? This cannot be undone.")
+                    if st.button("Yes, delete this lead", key=f"del_{idx}", type="primary",
+                                 use_container_width=True):
+                        if delete_lead(idx + 1, company):
+                            st.rerun()
+                        else:
+                            st.error("Delete failed — please refresh the page and try again.")

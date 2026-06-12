@@ -32,6 +32,47 @@ PIPELINE_STAGES = [
     "No Response — Follow Up Later",
 ]
 
+# Three-tier status system for the Leads UI
+# red    = action needed from our side (pending on us)
+# yellow = work in progress (design/quotation being prepared, waiting on vendor)
+# green  = sent to client (design or quotation with the client)
+STAGE_TIERS = {
+    "Hot Lead (Apollo)":                  "red",
+    "Hot Lead (Deepak)":                  "red",
+    "Hot Lead (Inbound)":                 "red",
+    "Info Request Replied":               "red",
+    "Brief Received (v1)":                "red",
+    "Brief Received (v2)":                "red",
+    "Brief Received (v3)":                "red",
+    "New Brief Received (Client Changed)": "red",
+    "Additional Changes Requested":       "red",
+    "Client Requested Discount":          "red",
+    "No Response — Follow Up Later":      "red",
+    "Brief Sent to Designer":             "yellow",
+    "Revised Brief Sent to Designer":     "yellow",
+    "Brief Sent to Vendor":               "yellow",
+    "Vendor Quotation Received":          "yellow",
+    "Client Quotation Prepared":          "yellow",
+    "Design Option 1 Sent":               "green",
+    "Design Option 2 Sent":               "green",
+    "Design Option 3 Sent":               "green",
+    "Waiting for Design Feedback":        "green",
+    "Client Quotation 1 Sent":            "green",
+    "Discounted Quotation Sent":          "green",
+    "Revised Quotation Sent":             "green",
+    "Waiting for Final Approval":         "green",
+    "Won":                                "won",
+    "Lost":                               "lost",
+}
+
+TIER_STYLE = {
+    "red":    {"color": "#FF4D4F", "bg": "rgba(255,77,79,0.14)",  "label": "Action needed"},
+    "yellow": {"color": "#FFB020", "bg": "rgba(255,176,32,0.14)", "label": "In progress"},
+    "green":  {"color": "#2ECC71", "bg": "rgba(46,204,113,0.14)", "label": "With client"},
+    "won":    {"color": "#2ECC71", "bg": "rgba(46,204,113,0.18)", "label": "Won"},
+    "lost":   {"color": "#8B8B8B", "bg": "rgba(139,139,139,0.14)","label": "Lost"},
+}
+
 STAGE_COLORS = {
     "Hot Lead (Apollo)": "🔴",
     "Hot Lead (Deepak)": "🔴",

@@ -1,5 +1,9 @@
 # NEVER upload these to GitHub
 .streamlit/secrets.toml
+.claude/
+SETUP.md
+RULES.md
+STRATEGY.md
 
 # Python
 __pycache__/
