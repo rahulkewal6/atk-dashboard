@@ -110,13 +110,14 @@ gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]), scope
 ---
 
 ## Pipeline stages (leads)
-Defined in `utils/constants.py` → `PIPELINE_STAGES`
+Defined in `utils/constants.py` → `PIPELINE_STAGES`, grouped by `STAGE_TIERS` / `TIER_STYLE` into 6 status buckets (shown as clickable filter cards on the Leads page):
 
-**Red (pending/needs action):** Hot Lead (all types), Info Request Replied, Waiting for Design Feedback, Waiting for Final Approval, No Response — Follow Up Later, Client Requested Discount, Additional Changes Requested
-
-**Green (active progress):** Brief Received, Brief Sent to Designer, Design Options Sent, Quotation stages (sent/prepared)
-
-**Special:** Won ✅, Lost ❌
+- 🔴 **red — Action needed** (pending on us): Hot Leads, Info Request Replied, Brief Received v1-3, New Brief Received, Additional Changes Requested, Client Requested Discount, No Response
+- 🟡 **design_prog — Design in progress**: Brief Sent to Designer, Revised Brief Sent to Designer
+- 🟠 **quote_prog — Quotation in progress**: Brief Sent to Vendor, Vendor Quotation Received, Client Quotation Prepared
+- 🟢 **design_client — Design with client**: Design Option 1/2/3 Sent, Waiting for Design Feedback
+- 🔵 **quote_client — Quotation with client**: Client Quotation 1 Sent, Discounted/Revised Quotation Sent, Waiting for Final Approval
+- ✅ **won** / ❌ **lost**
 
 ---
 

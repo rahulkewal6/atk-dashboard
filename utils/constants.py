@@ -32,10 +32,12 @@ PIPELINE_STAGES = [
     "No Response — Follow Up Later",
 ]
 
-# Three-tier status system for the Leads UI
-# red    = action needed from our side (pending on us)
-# yellow = work in progress (design/quotation being prepared, waiting on vendor)
-# green  = sent to client (design or quotation with the client)
+# Status system for the Leads UI
+# red           = action needed from our side (pending on us)
+# design_prog   = brief with our in-house designer
+# quote_prog    = quotation being prepared / waiting on vendor
+# design_client = design sent to client, awaiting their feedback
+# quote_client  = quotation sent to client, awaiting approval
 STAGE_TIERS = {
     "Hot Lead (Apollo)":                  "red",
     "Hot Lead (Deepak)":                  "red",
@@ -48,29 +50,31 @@ STAGE_TIERS = {
     "Additional Changes Requested":       "red",
     "Client Requested Discount":          "red",
     "No Response — Follow Up Later":      "red",
-    "Brief Sent to Designer":             "yellow",
-    "Revised Brief Sent to Designer":     "yellow",
-    "Brief Sent to Vendor":               "yellow",
-    "Vendor Quotation Received":          "yellow",
-    "Client Quotation Prepared":          "yellow",
-    "Design Option 1 Sent":               "green",
-    "Design Option 2 Sent":               "green",
-    "Design Option 3 Sent":               "green",
-    "Waiting for Design Feedback":        "green",
-    "Client Quotation 1 Sent":            "green",
-    "Discounted Quotation Sent":          "green",
-    "Revised Quotation Sent":             "green",
-    "Waiting for Final Approval":         "green",
+    "Brief Sent to Designer":             "design_prog",
+    "Revised Brief Sent to Designer":     "design_prog",
+    "Brief Sent to Vendor":               "quote_prog",
+    "Vendor Quotation Received":          "quote_prog",
+    "Client Quotation Prepared":          "quote_prog",
+    "Design Option 1 Sent":               "design_client",
+    "Design Option 2 Sent":               "design_client",
+    "Design Option 3 Sent":               "design_client",
+    "Waiting for Design Feedback":        "design_client",
+    "Client Quotation 1 Sent":            "quote_client",
+    "Discounted Quotation Sent":          "quote_client",
+    "Revised Quotation Sent":             "quote_client",
+    "Waiting for Final Approval":         "quote_client",
     "Won":                                "won",
     "Lost":                               "lost",
 }
 
 TIER_STYLE = {
-    "red":    {"color": "#FF4D4F", "bg": "rgba(255,77,79,0.14)",  "label": "Action needed"},
-    "yellow": {"color": "#FFB020", "bg": "rgba(255,176,32,0.14)", "label": "In progress"},
-    "green":  {"color": "#2ECC71", "bg": "rgba(46,204,113,0.14)", "label": "With client"},
-    "won":    {"color": "#2ECC71", "bg": "rgba(46,204,113,0.18)", "label": "Won"},
-    "lost":   {"color": "#8B8B8B", "bg": "rgba(139,139,139,0.14)","label": "Lost"},
+    "red":           {"color": "#FF4D4F", "bg": "rgba(255,77,79,0.14)",   "label": "Action needed"},
+    "design_prog":   {"color": "#FFB020", "bg": "rgba(255,176,32,0.14)",  "label": "Design in progress"},
+    "quote_prog":    {"color": "#FF8C42", "bg": "rgba(255,140,66,0.14)",  "label": "Quotation in progress"},
+    "design_client": {"color": "#2ECC71", "bg": "rgba(46,204,113,0.14)",  "label": "Design with client"},
+    "quote_client":  {"color": "#38BDF8", "bg": "rgba(56,189,248,0.14)",  "label": "Quotation with client"},
+    "won":           {"color": "#2ECC71", "bg": "rgba(46,204,113,0.18)",  "label": "Won"},
+    "lost":          {"color": "#8B8B8B", "bg": "rgba(139,139,139,0.14)", "label": "Lost"},
 }
 
 STAGE_COLORS = {

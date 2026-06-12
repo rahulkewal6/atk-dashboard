@@ -16,7 +16,7 @@ show_user_bar()
 
 
 def _tier(stage: str) -> str:
-    return STAGE_TIERS.get(stage, "yellow")
+    return STAGE_TIERS.get(stage, "red")
 
 
 def _pill(stage: str) -> str:
@@ -41,7 +41,10 @@ def _lead_header(lead_no: int, company: str, exhibition: str, stage: str) -> str
 
 
 st.title("Leads")
-st.caption("Your pipeline at a glance — 🔴 action needed from us · 🟡 in progress · 🟢 with the client")
+st.caption(
+    "🔴 action needed from us · 🟡 design in progress · 🟠 quotation in progress · "
+    "🟢 design with client · 🔵 quotation with client"
+)
 
 # Sidebar notification badge for due follow-ups
 _due = get_due_count()
@@ -96,24 +99,24 @@ if df.empty:
     st.stop()
 
 # ── Status summary strip (clickable — filters the list) ──────────────────────
-_STATUS_OPTIONS = ["All", "🔴 Action needed", "🟡 In progress", "🟢 With client", "✅ Won", "❌ Lost"]
+_CARD_TIERS = ["red", "design_prog", "quote_prog", "design_client", "quote_client", "won"]
+_CARD_TO_STATUS = {
+    "red":           "🔴 Action needed",
+    "design_prog":   "🟡 Design in progress",
+    "quote_prog":    "🟠 Quotation in progress",
+    "design_client": "🟢 Design with client",
+    "quote_client":  "🔵 Quotation with client",
+    "won":           "✅ Won",
+}
+_STATUS_OPTIONS = ["All"] + list(_CARD_TO_STATUS.values()) + ["❌ Lost"]
 if "lead_status" not in st.session_state:
     st.session_state["lead_status"] = "All"
 
 if "Current Stage" in df.columns:
     tiers = df["Current Stage"].map(lambda s: _tier(str(s)))
-    counts = {
-        "red":    int((tiers == "red").sum()),
-        "yellow": int((tiers == "yellow").sum()),
-        "green":  int((tiers == "green").sum()),
-        "won":    int((tiers == "won").sum()),
-    }
-    _CARD_TO_STATUS = {
-        "red": "🔴 Action needed", "yellow": "🟡 In progress",
-        "green": "🟢 With client", "won": "✅ Won",
-    }
-    sc = st.columns(4)
-    for col, t in zip(sc, ["red", "yellow", "green", "won"]):
+    counts = {t: int((tiers == t).sum()) for t in _CARD_TIERS}
+    sc = st.columns(len(_CARD_TIERS))
+    for col, t in zip(sc, _CARD_TIERS):
         status_label = _CARD_TO_STATUS[t]
         selected = st.session_state["lead_status"] == status_label
         with col:
@@ -139,10 +142,8 @@ with c4:
     filter_stage = st.multiselect("Stage", ["All"] + PIPELINE_STAGES, default=["All"])
 
 filtered = df.copy()
-_STATUS_TO_TIER = {
-    "🔴 Action needed": "red", "🟡 In progress": "yellow",
-    "🟢 With client": "green", "✅ Won": "won", "❌ Lost": "lost",
-}
+_STATUS_TO_TIER = {v: k for k, v in _CARD_TO_STATUS.items()}
+_STATUS_TO_TIER["❌ Lost"] = "lost"
 if filter_status != "All" and "Current Stage" in filtered.columns:
     want = _STATUS_TO_TIER[filter_status]
     filtered = filtered[filtered["Current Stage"].map(lambda s: _tier(str(s))) == want]
@@ -171,7 +172,8 @@ if filtered.empty:
     st.stop()
 
 # Sort: action-needed first, then in-progress, then with-client
-_TIER_ORDER = {"red": 0, "yellow": 1, "green": 2, "won": 3, "lost": 4}
+_TIER_ORDER = {"red": 0, "design_prog": 1, "quote_prog": 2,
+               "design_client": 3, "quote_client": 4, "won": 5, "lost": 6}
 if "Current Stage" in filtered.columns:
     filtered = filtered.copy()
     filtered["_tier_sort"] = filtered["Current Stage"].map(lambda s: _TIER_ORDER.get(_tier(str(s)), 1))
