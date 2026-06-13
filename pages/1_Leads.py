@@ -7,7 +7,7 @@ from utils.sheets import (
 )
 from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar, is_admin
+from utils.auth import require_login, show_user_bar, is_admin, can_modify
 
 inject_css()
 require_login()
@@ -187,8 +187,9 @@ for idx, row in filtered.iterrows():
 
     with st.container(border=True):
 
-        # ── Header row: name + pill + inline stage updater ───────────────────
-        hl, hr = st.columns([4, 1.3])
+        # ── Header row: name + pill + inline stage updater + ⋮ menu ──────────
+        owner = str(row.get("Last Updated By", ""))
+        hl, hr, hm = st.columns([5, 1.4, 0.7])
         with hl:
             st.markdown(_lead_header(idx + 1, company, exhibition, stage), unsafe_allow_html=True)
         with hr:
@@ -203,6 +204,28 @@ for idx, row in filtered.iterrows():
                     update_lead_field(idx + 1, "Current Stage", q_stage, q_user)
                     log_stage_change(company, q_stage, q_user, "")
                     st.rerun()
+        with hm:
+            with st.popover("⋮", use_container_width=True):
+                if can_modify(owner):
+                    st.caption("Edit all fields in the **Details** section below.")
+                    st.divider()
+                    if not st.session_state.get(f"confirm_dellead_{idx}"):
+                        if st.button("🗑 Delete lead", key=f"dellead_{idx}", use_container_width=True):
+                            st.session_state[f"confirm_dellead_{idx}"] = True
+                            st.rerun()
+                    else:
+                        st.warning(f"Permanently delete **{company}**?")
+                        if st.button("Yes, delete", key=f"yesdellead_{idx}", type="primary", use_container_width=True):
+                            if delete_lead(idx + 1, company):
+                                st.session_state.pop(f"confirm_dellead_{idx}", None)
+                                st.rerun()
+                            else:
+                                st.error("Delete failed — refresh and try again.")
+                        if st.button("Cancel", key=f"nodellead_{idx}", use_container_width=True):
+                            st.session_state.pop(f"confirm_dellead_{idx}", None)
+                            st.rerun()
+                else:
+                    st.caption(f"Only {owner or 'the owner'} or an admin can delete this lead.")
 
         # ── Details ───────────────────────────────────────────────────────────
         with st.expander("Details, follow-up & history"):
@@ -339,23 +362,12 @@ for idx, row in filtered.iterrows():
                         st.success("Saved!")
                         st.rerun()
 
-            # ── Stage history + delete ────────────────────────────────────────
+            # ── Stage history ─────────────────────────────────────────────────
             st.markdown("---")
             history = get_stage_history(company)
-            hcol, dcol = st.columns([4, 1])
-            with hcol:
-                if not history.empty:
-                    display_cols = [c for c in ["Stage", "Updated By", "Date/Time", "Notes"] if c in history.columns]
-                    st.dataframe(history[display_cols].reset_index(drop=True),
-                                 use_container_width=True, hide_index=True)
-                else:
-                    st.caption("No stage history logged yet.")
-            with dcol:
-                with st.popover("🗑 Delete", use_container_width=True):
-                    st.warning(f"Permanently delete **{company}**? This cannot be undone.")
-                    if st.button("Yes, delete this lead", key=f"del_{idx}", type="primary",
-                                 use_container_width=True):
-                        if delete_lead(idx + 1, company):
-                            st.rerun()
-                        else:
-                            st.error("Delete failed — please refresh the page and try again.")
+            if not history.empty:
+                display_cols = [c for c in ["Stage", "Updated By", "Date/Time", "Notes"] if c in history.columns]
+                st.dataframe(history[display_cols].reset_index(drop=True),
+                             use_container_width=True, hide_index=True)
+            else:
+                st.caption("No stage history logged yet.")

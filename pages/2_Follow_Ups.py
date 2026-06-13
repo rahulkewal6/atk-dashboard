@@ -3,11 +3,12 @@ import pandas as pd
 from datetime import datetime, date
 from utils.sheets import (
     get_followups_df, add_followup, update_followup_status,
+    update_followup_fields, delete_followup,
     get_due_followups, get_due_count, get_pipeline_df,
 )
 from utils.constants import USERS, EXHIBITIONS
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar
+from utils.auth import require_login, show_user_bar, can_modify
 
 inject_css()
 require_login()
@@ -128,13 +129,14 @@ st.markdown("---")
 
 # ── Follow-up list ────────────────────────────────────────────────────────────
 for idx, row in df.iterrows():
-    company  = row.get("Company Name", "—")
-    exh      = row.get("Exhibition",   "")
-    fu_date  = row.get("Follow-up Date", "—")
-    assigned = row.get("Assigned To",  "—")
-    stage    = row.get("Stage at Time", "")
-    notes    = row.get("Notes",         "")
-    status   = row.get("Status",        "Pending")
+    company    = row.get("Company Name", "—")
+    exh        = row.get("Exhibition",   "")
+    fu_date    = row.get("Follow-up Date", "—")
+    assigned   = row.get("Assigned To",  "—")
+    stage      = row.get("Stage at Time", "")
+    notes      = row.get("Notes",         "")
+    status     = row.get("Status",        "Pending")
+    created_by = row.get("Created By",    "")
 
     # Determine if overdue
     is_overdue = False
@@ -145,24 +147,68 @@ for idx, row in df.iterrows():
         pass
 
     icon = "🔴" if is_overdue else ("✅" if status == "Done" else "📅")
-    label = f"{icon}  {company}  —  {exh}  ·  {fu_date}  ·  👤 {assigned}"
 
-    with st.expander(label):
-        lc, rc = st.columns([3, 1])
+    with st.container(border=True):
+        lc, mc = st.columns([8, 1])
         with lc:
+            st.markdown(f"**{icon}  {company}**" + (f"  ·  {exh}" if exh else ""))
+            st.caption(f"📅 {fu_date}  ·  👤 {assigned}  ·  Status: **{status}**")
             if stage:
                 st.caption(f"Stage when added: {stage}")
             if notes:
-                st.markdown(f"_{notes}_")
-            st.caption(f"Status: **{status}**")
-        with rc:
-            if status != "Done":
-                if st.button("✓ Mark Done", key=f"done_{idx}", type="primary", use_container_width=True):
-                    update_followup_status(idx, "Done")
-                    get_due_followups.clear()
-                    st.rerun()
-            else:
-                if st.button("↩ Reopen", key=f"reopen_{idx}", use_container_width=True):
-                    update_followup_status(idx, "Pending")
-                    get_due_followups.clear()
-                    st.rerun()
+                st.caption(f"📝 {notes}")
+        with mc:
+            with st.popover("⋮", use_container_width=True):
+                if status != "Done":
+                    if st.button("✓ Mark Done", key=f"done_{idx}", type="primary", use_container_width=True):
+                        update_followup_status(idx, "Done")
+                        st.rerun()
+                else:
+                    if st.button("↩ Reopen", key=f"reopen_{idx}", use_container_width=True):
+                        update_followup_status(idx, "Pending")
+                        st.rerun()
+
+                if can_modify(created_by):
+                    st.divider()
+                    with st.form(f"edit_fu_{idx}"):
+                        st.caption("✏️ Edit follow-up")
+                        e_company = st.text_input("Company / Client", value=str(company))
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            try:
+                                _fd = pd.to_datetime(fu_date, dayfirst=True).date()
+                            except Exception:
+                                _fd = today
+                            e_date = st.date_input("Follow-up Date", value=_fd)
+                        with ec2:
+                            e_assigned = st.selectbox(
+                                "Assign To", USERS,
+                                index=USERS.index(assigned) if assigned in USERS else 0,
+                            )
+                        e_notes = st.text_input("Notes", value=str(notes))
+                        if st.form_submit_button("💾 Save changes", type="primary", use_container_width=True):
+                            update_followup_fields(idx, {
+                                "Company Name":  e_company,
+                                "Follow-up Date": e_date.strftime("%d-%b-%Y"),
+                                "Assigned To":   e_assigned,
+                                "Notes":         e_notes,
+                            })
+                            st.rerun()
+
+                    st.divider()
+                    if not st.session_state.get(f"confirm_delfu_{idx}"):
+                        if st.button("🗑 Delete", key=f"delfu_{idx}", use_container_width=True):
+                            st.session_state[f"confirm_delfu_{idx}"] = True
+                            st.rerun()
+                    else:
+                        st.warning("Delete this follow-up permanently?")
+                        if st.button("Yes, delete", key=f"yesdelfu_{idx}", type="primary", use_container_width=True):
+                            delete_followup(idx)
+                            st.session_state.pop(f"confirm_delfu_{idx}", None)
+                            st.rerun()
+                        if st.button("Cancel", key=f"nodelfu_{idx}", use_container_width=True):
+                            st.session_state.pop(f"confirm_delfu_{idx}", None)
+                            st.rerun()
+                else:
+                    st.divider()
+                    st.caption(f"Only {created_by or 'the creator'} or an admin can edit or delete this.")

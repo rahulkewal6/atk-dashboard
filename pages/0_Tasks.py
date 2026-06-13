@@ -1,9 +1,12 @@
 import streamlit as st
 from datetime import datetime, date
-from utils.sheets import get_tasks_df, add_task, update_task, get_due_followups, update_followup_status
+from utils.sheets import (
+    get_tasks_df, add_task, update_task, update_task_fields, delete_task,
+    get_due_followups, update_followup_status,
+)
 from utils.constants import TASK_PRIORITIES, TASK_STATUSES, USERS
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar
+from utils.auth import require_login, show_user_bar, can_modify
 
 inject_css()
 require_login()
@@ -111,41 +114,89 @@ _PRIORITY_COLOR = {"High": "🔴", "Medium": "🟡", "Low": "⚪"}
 _STATUS_COLOR   = {"Pending": "🕐", "In Progress": "🔄", "Done": "✅"}
 
 for idx, row in df.iterrows():
-    task_id  = row.get("Task ID", "")
-    title    = row.get("Title", "—")
-    assigned = row.get("Assigned To", "")
-    priority = row.get("Priority", "Medium")
-    status   = row.get("Status", "Pending")
-    due      = row.get("Due Date", "")
-    notes    = row.get("Notes", "")
-    source   = row.get("Source", "Manual")
-    src_co   = row.get("Source Company", "")
+    title      = row.get("Title", "—")
+    assigned   = row.get("Assigned To", "")
+    priority   = row.get("Priority", "Medium")
+    status     = row.get("Status", "Pending")
+    due        = row.get("Due Date", "")
+    notes      = row.get("Notes", "")
+    source     = row.get("Source", "Manual")
+    src_co     = row.get("Source Company", "")
+    created_by = row.get("Created By", "")
 
     p_icon = _PRIORITY_COLOR.get(priority, "⚪")
     s_icon = _STATUS_COLOR.get(status, "🕐")
-    label  = f"{s_icon}  {title}"
-    if src_co:
-        label += f"  ·  {src_co}"
-    if str(assigned).strip():
-        label += f"  ·  👤 {assigned}"
-    if str(due).strip():
-        label += f"  ·  📅 {due}"
 
-    with st.expander(label):
-        lc, rc = st.columns([3, 1])
-        with lc:
-            st.caption(f"{p_icon} {priority}  ·  👤 {assigned}  ·  📅 {due}")
+    with st.container(border=True):
+        tc, mc = st.columns([8, 1])
+        with tc:
+            meta = f"{p_icon} {priority}  ·  👤 {assigned or '—'}  ·  📅 {due or '—'}"
+            if src_co:
+                meta += f"  ·  {src_co}"
+            st.markdown(f"**{s_icon}  {title}**")
+            st.caption(meta)
             if notes:
-                st.markdown(f"_{notes}_")
+                st.caption(f"📝 {notes}")
             if source != "Manual":
                 st.caption(f"From: {source} follow-up")
-        with rc:
-            with st.form(f"task_upd_{idx}"):
+        with mc:
+            with st.popover("⋮", use_container_width=True):
+                st.caption("Status")
                 new_status = st.selectbox(
                     "Status", TASK_STATUSES,
                     index=TASK_STATUSES.index(status) if status in TASK_STATUSES else 0,
-                    label_visibility="collapsed",
+                    key=f"taskstatus_{idx}", label_visibility="collapsed",
                 )
-                if st.form_submit_button("Update", use_container_width=True, type="primary"):
+                if st.button("Update status", key=f"taskstatusbtn_{idx}", use_container_width=True):
                     update_task(idx, "Status", new_status)
                     st.rerun()
+
+                if can_modify(created_by):
+                    st.divider()
+                    with st.form(f"edit_task_{idx}"):
+                        st.caption("✏️ Edit task")
+                        e_title = st.text_input("Task", value=str(title))
+                        ec1, ec2 = st.columns(2)
+                        with ec1:
+                            e_assigned = st.selectbox(
+                                "Assign To", USERS,
+                                index=USERS.index(assigned) if assigned in USERS else 0,
+                            )
+                            e_priority = st.selectbox(
+                                "Priority", TASK_PRIORITIES,
+                                index=TASK_PRIORITIES.index(priority) if priority in TASK_PRIORITIES else 1,
+                            )
+                        with ec2:
+                            try:
+                                _dd = datetime.strptime(str(due), "%d-%b-%Y").date()
+                            except Exception:
+                                _dd = date.today()
+                            e_due = st.date_input("Due Date", value=_dd)
+                        e_notes = st.text_input("Notes", value=str(notes))
+                        if st.form_submit_button("💾 Save changes", type="primary", use_container_width=True):
+                            update_task_fields(idx, {
+                                "Title":       e_title,
+                                "Assigned To": e_assigned,
+                                "Priority":    e_priority,
+                                "Due Date":    e_due.strftime("%d-%b-%Y"),
+                                "Notes":       e_notes,
+                            })
+                            st.rerun()
+
+                    st.divider()
+                    if not st.session_state.get(f"confirm_deltask_{idx}"):
+                        if st.button("🗑 Delete task", key=f"deltask_{idx}", use_container_width=True):
+                            st.session_state[f"confirm_deltask_{idx}"] = True
+                            st.rerun()
+                    else:
+                        st.warning("Delete this task permanently?")
+                        if st.button("Yes, delete", key=f"yesdeltask_{idx}", type="primary", use_container_width=True):
+                            delete_task(idx)
+                            st.session_state.pop(f"confirm_deltask_{idx}", None)
+                            st.rerun()
+                        if st.button("Cancel", key=f"nodeltask_{idx}", use_container_width=True):
+                            st.session_state.pop(f"confirm_deltask_{idx}", None)
+                            st.rerun()
+                else:
+                    st.divider()
+                    st.caption(f"Only {created_by or 'the creator'} or an admin can edit or delete this.")

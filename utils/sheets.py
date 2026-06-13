@@ -604,7 +604,7 @@ def add_task(data: dict) -> bool:
         return False
 
 
-def update_task(row_num: int, field: str, value) -> bool:
+def update_task(df_index: int, field: str, value) -> bool:
     ws = _get_or_create_tab("ATK Tasks", TASK_HEADERS)
     if not ws:
         return False
@@ -612,7 +612,36 @@ def update_task(row_num: int, field: str, value) -> bool:
         headers = ws.row_values(1)
         if field not in headers:
             return False
-        ws.update_cell(row_num + 1, headers.index(field) + 1, value)
+        ws.update_cell(df_index + 2, headers.index(field) + 1, value)
+        get_due_count.clear()
+        return True
+    except Exception:
+        return False
+
+
+def update_task_fields(df_index: int, fields: dict) -> bool:
+    """Update several fields of one task in a single pass."""
+    ws = _get_or_create_tab("ATK Tasks", TASK_HEADERS)
+    if not ws:
+        return False
+    try:
+        headers = ws.row_values(1)
+        sheet_row = df_index + 2
+        for field, value in fields.items():
+            if field in headers:
+                ws.update_cell(sheet_row, headers.index(field) + 1, value)
+        get_due_count.clear()
+        return True
+    except Exception:
+        return False
+
+
+def delete_task(df_index: int) -> bool:
+    ws = _get_or_create_tab("ATK Tasks", TASK_HEADERS)
+    if not ws:
+        return False
+    try:
+        ws.delete_rows(df_index + 2)
         get_due_count.clear()
         return True
     except Exception:
@@ -653,15 +682,47 @@ def add_followup(data: dict) -> bool:
         return False
 
 
-def update_followup_status(row_num: int, status: str) -> bool:
+def update_followup_status(df_index: int, status: str) -> bool:
     ws = _get_or_create_tab("ATK Followups", FOLLOWUP_HEADERS)
     if not ws:
         return False
     try:
         headers = ws.row_values(1)
         col = headers.index("Status") + 1
-        ws.update_cell(row_num + 1, col, status)
+        ws.update_cell(df_index + 2, col, status)
         get_due_count.clear()
+        get_due_followups.clear()
+        return True
+    except Exception:
+        return False
+
+
+def update_followup_fields(df_index: int, fields: dict) -> bool:
+    """Update several fields of one follow-up in a single pass."""
+    ws = _get_or_create_tab("ATK Followups", FOLLOWUP_HEADERS)
+    if not ws:
+        return False
+    try:
+        headers = ws.row_values(1)
+        sheet_row = df_index + 2
+        for field, value in fields.items():
+            if field in headers:
+                ws.update_cell(sheet_row, headers.index(field) + 1, value)
+        get_due_count.clear()
+        get_due_followups.clear()
+        return True
+    except Exception:
+        return False
+
+
+def delete_followup(df_index: int) -> bool:
+    ws = _get_or_create_tab("ATK Followups", FOLLOWUP_HEADERS)
+    if not ws:
+        return False
+    try:
+        ws.delete_rows(df_index + 2)
+        get_due_count.clear()
+        get_due_followups.clear()
         return True
     except Exception:
         return False

@@ -68,6 +68,16 @@ def get_display_name() -> str:
     return st.session_state.get("display_name", "")
 
 
+def can_modify(owner: str) -> bool:
+    """
+    True if the current user may edit/delete an item.
+    Admins can modify everything; editors can modify only what they created.
+    """
+    if is_admin():
+        return True
+    return str(owner or "").strip().lower() == get_display_name().strip().lower()
+
+
 def show_user_bar():
     """
     Show logged-in user info + logout button in the sidebar.
