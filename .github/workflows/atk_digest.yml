@@ -1,0 +1,39 @@
+name: ATK Digest Email
+
+on:
+  schedule:
+    # Times are UTC. Dubai is UTC+4.
+    - cron: '0 16 * * 0'      # Sunday 20:00 Dubai — "week ahead"
+    - cron: '0 4 * * 1,3,5'   # Mon/Wed/Fri 08:00 Dubai — "check-in"
+  workflow_dispatch:           # lets you run it manually for testing
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install gspread google-auth
+
+      - name: Choose mode
+        run: |
+          if [ "${{ github.event.schedule }}" = "0 16 * * 0" ]; then
+            echo "MODE=weekahead" >> "$GITHUB_ENV"
+          else
+            echo "MODE=checkin" >> "$GITHUB_ENV"
+          fi
+
+      - name: Send digest
+        env:
+          MODE: ${{ env.MODE }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+        run: python scripts/atk_digest.py

@@ -126,7 +126,14 @@ SOURCES = [
     "Referral",
     "Other (specify)",
 ]
-USERS = ["Rahul", "Bhavika"]
+USERS = ["Rahul", "Bhavika", "Deepak"]
+
+# Email addresses for notifications (not secret)
+USER_EMAILS = {
+    "Rahul":   "marketing@atkexhibitions.com",
+    "Bhavika": "bhavika@atkexhibitions.com",
+    "Deepak":  "deepak@atkexhibitions.com",
+}
 
 PIPELINE_HEADERS = [
     "Company Name", "Exhibition", "Source", "Contact Email", "Contact Name",

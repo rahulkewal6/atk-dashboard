@@ -7,6 +7,7 @@ from utils.sheets import (
 from utils.constants import TASK_PRIORITIES, TASK_STATUSES, USERS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, can_modify
+from utils.notify import notify_task_assigned
 
 inject_css()
 require_login()
@@ -59,16 +60,18 @@ with st.expander("➕ Add New Task"):
             if not title:
                 st.error("Task title is required.")
             else:
+                due_str = due_date.strftime("%d-%b-%Y")
                 ok = add_task({
                     "title":       title,
                     "assigned_to": assigned,
                     "priority":    priority,
-                    "due_date":    due_date.strftime("%d-%b-%Y"),
+                    "due_date":    due_str,
                     "notes":       notes,
                     "created_by":  created_by,
                     "source":      "Manual",
                 })
                 if ok:
+                    notify_task_assigned(title, assigned, created_by, priority, due_str, notes)
                     st.success("Task added!")
                     st.rerun()
                 else:

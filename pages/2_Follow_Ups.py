@@ -8,7 +8,8 @@ from utils.sheets import (
 )
 from utils.constants import USERS, EXHIBITIONS
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar, can_modify
+from utils.auth import require_login, show_user_bar, can_modify, get_display_name
+from utils.notify import notify_followup_assigned
 
 inject_css()
 require_login()
@@ -53,16 +54,33 @@ with st.expander("➕ Add Follow-up"):
             if not str(company_in).strip():
                 st.error("Client / company name is required.")
             else:
+                company_clean = str(company_in).strip()
+                fu_date_str = fu_date.strftime("%d-%b-%Y")
+                # Pull contact details from the matching lead, if there is one
+                c_name = c_phone = c_email = ""
+                if not pipeline_df.empty and "Company Name" in pipeline_df.columns:
+                    match = pipeline_df[pipeline_df["Company Name"].astype(str) == company_clean]
+                    if not match.empty:
+                        lead = match.iloc[0]
+                        c_name  = str(lead.get("Contact Name", "") or "")
+                        c_phone = str(lead.get("Contact Phone", "") or "")
+                        c_email = str(lead.get("Contact Email", "") or "")
                 ok = add_followup({
-                    "company_name":  str(company_in).strip(),
+                    "company_name":  company_clean,
                     "exhibition":    "" if fu_exh == "—" else fu_exh,
                     "stage_at_time": "",
-                    "followup_date": fu_date.strftime("%d-%b-%Y"),
+                    "followup_date": fu_date_str,
                     "assigned_to":   fu_user,
                     "notes":         fu_notes,
-                    "created_by":    fu_user,
+                    "created_by":    get_display_name(),
                 })
                 if ok:
+                    notify_followup_assigned(
+                        assigned_to=fu_user, assigned_by=get_display_name(),
+                        company=company_clean, exhibition=("" if fu_exh == "—" else fu_exh),
+                        fu_date=fu_date_str, notes=fu_notes,
+                        contact_name=c_name, contact_phone=c_phone, contact_email=c_email,
+                    )
                     get_due_followups.clear()
                     get_due_count.clear()
                     st.success(f"✅ Follow-up saved — it will show in Tasks on {fu_date.strftime('%d %b %Y')}.")

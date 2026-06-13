@@ -7,7 +7,8 @@ from utils.sheets import (
 )
 from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar, is_admin, can_modify
+from utils.auth import require_login, show_user_bar, is_admin, can_modify, get_display_name
+from utils.notify import notify_followup_assigned
 
 inject_css()
 require_login()
@@ -285,16 +286,25 @@ for idx, row in filtered.iterrows():
                     fu_notes = st.text_input("Notes", placeholder="e.g. Follow up on quotation",
                                              key=f"fu_notes_{idx}")
                     if st.form_submit_button("Save Follow-up", type="primary"):
+                        fu_date_str = fu_date.strftime("%d-%b-%Y")
                         ok = add_followup({
                             "company_name":  company,
                             "exhibition":    exhibition,
                             "stage_at_time": stage,
-                            "followup_date": fu_date.strftime("%d-%b-%Y"),
+                            "followup_date": fu_date_str,
                             "assigned_to":   fu_user,
                             "notes":         fu_notes,
-                            "created_by":    fu_user,
+                            "created_by":    get_display_name(),
                         })
                         if ok:
+                            notify_followup_assigned(
+                                assigned_to=fu_user, assigned_by=get_display_name(),
+                                company=company, exhibition=exhibition, fu_date=fu_date_str,
+                                notes=fu_notes,
+                                contact_name=str(row.get("Contact Name", "") or ""),
+                                contact_phone=str(row.get("Contact Phone", "") or ""),
+                                contact_email=str(row.get("Contact Email", "") or ""),
+                            )
                             st.success(f"✅ Follow-up set for {fu_date.strftime('%d %b %Y')} — will appear in Tasks when due.")
                             get_due_count.clear()
                         else:
