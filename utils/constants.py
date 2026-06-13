@@ -132,7 +132,7 @@ PIPELINE_HEADERS = [
     "Company Name", "Exhibition", "Source", "Contact Email", "Contact Name",
     "Contact Phone", "Current Stage", "Brief Version", "Design Options Sent",
     "Vendor Quote (AED)", "Margin (AED)", "Client Quote (AED)",
-    "Discount Given", "Notes", "Last Updated By", "Date Added",
+    "Discount Given", "Notes", "Added By", "Last Updated By", "Date Added",
 ]
 
 HISTORY_HEADERS = ["Company Name", "Stage", "Updated By", "Date/Time", "Notes"]

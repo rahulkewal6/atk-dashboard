@@ -85,24 +85,33 @@ def add_lead(data: dict):
         return False
     try:
         ws = sheet.worksheet("Pipeline")
-        row = [
-            data.get("company_name", ""),
-            data.get("exhibition", ""),
-            data.get("source", ""),
-            data.get("contact_email", ""),
-            data.get("contact_name", ""),
-            data.get("contact_phone", ""),
-            data.get("current_stage", "Hot Lead (Apollo)"),
-            data.get("brief_version", 1),
-            data.get("design_options_sent", 0),
-            data.get("vendor_quote", ""),
-            data.get("margin", ""),
-            data.get("client_quote", ""),
-            data.get("discount_given", "No"),
-            data.get("notes", ""),
-            data.get("updated_by", ""),
-            datetime.now().strftime("%d-%b-%Y"),
-        ]
+        headers = ws.row_values(1)
+        # Make sure the "Added By" column exists on the live sheet
+        if "Added By" not in headers:
+            ws.update_cell(1, len(headers) + 1, "Added By")
+            headers.append("Added By")
+
+        added_by = data.get("added_by", data.get("updated_by", ""))
+        field_map = {
+            "Company Name":        data.get("company_name", ""),
+            "Exhibition":          data.get("exhibition", ""),
+            "Source":              data.get("source", ""),
+            "Contact Email":       data.get("contact_email", ""),
+            "Contact Name":        data.get("contact_name", ""),
+            "Contact Phone":       data.get("contact_phone", ""),
+            "Current Stage":       data.get("current_stage", "Hot Lead (Apollo)"),
+            "Brief Version":       data.get("brief_version", 1),
+            "Design Options Sent": data.get("design_options_sent", 0),
+            "Vendor Quote (AED)":  data.get("vendor_quote", ""),
+            "Margin (AED)":        data.get("margin", ""),
+            "Client Quote (AED)":  data.get("client_quote", ""),
+            "Discount Given":      data.get("discount_given", "No"),
+            "Notes":               data.get("notes", ""),
+            "Added By":            added_by,
+            "Last Updated By":     data.get("updated_by", added_by),
+            "Date Added":          datetime.now().strftime("%d-%b-%Y"),
+        }
+        row = [field_map.get(h, "") for h in headers]
         ws.append_row(row)
         invalidate_pipeline_cache()
         return True

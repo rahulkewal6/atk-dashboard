@@ -84,7 +84,8 @@ with st.expander("➕ Add New Lead"):
                     "company_name": company, "exhibition": exhibition,
                     "source": actual_source, "contact_email": contact_email,
                     "contact_name": contact_name, "contact_phone": contact_phone,
-                    "current_stage": default_stage, "notes": notes, "updated_by": added_by,
+                    "current_stage": default_stage, "notes": notes,
+                    "added_by": added_by, "updated_by": added_by,
                 })
                 if ok:
                     st.success(f"Lead added: {company}")
@@ -188,7 +189,8 @@ for idx, row in filtered.iterrows():
     with st.container(border=True):
 
         # ── Header row: name + pill + inline stage updater + ⋮ menu ──────────
-        owner = str(row.get("Last Updated By", ""))
+        # Owner = whoever added the lead (older rows fall back to last updater)
+        owner = str(row.get("Added By", "") or row.get("Last Updated By", ""))
         hl, hr, hm = st.columns([5, 1.4, 0.7])
         with hl:
             st.markdown(_lead_header(idx + 1, company, exhibition, stage), unsafe_allow_html=True)
@@ -236,7 +238,9 @@ for idx, row in filtered.iterrows():
                 src          = row.get("Source", "")
                 date_added   = row.get("Date Added", "")
                 last_updated = row.get("Last Updated By", "")
-                st.caption(f"📋 {src}  ·  Added {date_added}  ·  Updated by {last_updated}")
+                added_by_val = row.get("Added By", "")
+                _added = f"Added {date_added}" + (f" by {added_by_val}" if added_by_val else "")
+                st.caption(f"📋 {src}  ·  {_added}  ·  Updated by {last_updated}")
 
                 phone = str(row.get("Contact Phone", "") or "")
                 email = str(row.get("Contact Email", "") or "")
