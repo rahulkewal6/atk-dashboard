@@ -12,6 +12,14 @@ show_user_bar()
 st.title("📊 Sequences")
 st.markdown("Apollo email sequences — live stats, refreshed every 5 minutes.")
 
+
+def _num(value):
+    """Safely turn an Apollo value into a float (Apollo sometimes returns blanks/strings)."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
 if st.button("🔄 Refresh Now"):
     st.cache_data.clear()
     st.rerun()
@@ -60,8 +68,7 @@ for i, seq in enumerate(sequences[:5]):
         active_count = statuses.get("active", seq.get("active_contact_count", 0))
         status = seq.get("status", "unknown")
         icon = "✅" if status == "active" else "⚠️" if status == "paused" else "⬜"
-        open_r = seq.get("open_rate", 0) or 0
-        reply_r = seq.get("reply_rate", 0) or 0
+        reply_r = _num(seq.get("reply_rate", 0))
         st.metric(
             label=f"{icon} {name[:22]}",
             value=f"{active_count} active",
@@ -84,9 +91,9 @@ for seq in sequences:
     total   = active + paused + finished + bounced + not_sent
 
     # email stats
-    open_r   = seq.get("open_rate",   0) or 0
-    reply_r  = seq.get("reply_rate",  0) or 0
-    bounce_r = seq.get("bounce_rate", 0) or 0
+    open_r   = _num(seq.get("open_rate",   0))
+    reply_r  = _num(seq.get("reply_rate",  0))
+    bounce_r = _num(seq.get("bounce_rate", 0))
 
     opened   = seq.get("unique_opened",   0) or 0
     replied  = seq.get("unique_replied",  0) or 0
@@ -128,8 +135,8 @@ if selected:
         bounced  = (statuses.get("bounced", 0) or 0) + (statuses.get("hard_bounced", 0) or 0)
         opened   = seq_obj.get("unique_opened",  0) or 0
         replied  = seq_obj.get("unique_replied", 0) or 0
-        open_r   = (seq_obj.get("open_rate",  0) or 0) * 100
-        reply_r  = (seq_obj.get("reply_rate", 0) or 0) * 100
+        open_r   = _num(seq_obj.get("open_rate",  0)) * 100
+        reply_r  = _num(seq_obj.get("reply_rate", 0)) * 100
 
         col1, col2, col3, col4, col5, col6 = st.columns(6)
         col1.metric("Active", active)
