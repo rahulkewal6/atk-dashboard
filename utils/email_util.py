@@ -78,6 +78,18 @@ def task_assigned_html(title, assigned_by, priority, due, notes, link=""):
     return wrap_html("📋 New task for you", inner, link)
 
 
+def task_due_html(title, due_when, priority, notes, link=""):
+    inner = (
+        '<p style="margin:0 0 12px;">Heads-up — this task is due in about an hour '
+        'and isn\'t marked done yet:</p>'
+        f'<p style="font-size:1.05rem;font-weight:700;margin:0 0 12px;">{title}</p>'
+        '<table style="border-collapse:collapse;">'
+        + _row("Due", due_when) + _row("Priority", priority) + _row("Notes", notes)
+        + "</table>"
+    )
+    return wrap_html("⏰ Task due soon", inner, link)
+
+
 def followup_assigned_html(assigned_by, company, exhibition, fu_date, notes,
                            contact_name, contact_phone, contact_email, link=""):
     contact_rows = _row("Name", contact_name) + _row("Phone", contact_phone) + _row("Email", contact_email)

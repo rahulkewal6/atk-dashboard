@@ -594,19 +594,28 @@ def add_task(data: dict) -> bool:
     if not ws:
         return False
     try:
-        ws.append_row([
-            datetime.now().strftime("%Y%m%d%H%M%S"),
-            data.get("title", ""),
-            data.get("assigned_to", ""),
-            data.get("priority", "Medium"),
-            "Pending",
-            data.get("due_date", ""),
-            data.get("notes", ""),
-            data.get("source", "Manual"),
-            data.get("source_company", ""),
-            data.get("created_by", ""),
-            datetime.now().strftime("%d-%b-%Y"),
-        ])
+        headers = ws.row_values(1)
+        # Make sure newer columns exist on the live sheet
+        for col in ("Due Time", "Reminder Sent"):
+            if col not in headers:
+                ws.update_cell(1, len(headers) + 1, col)
+                headers.append(col)
+        field_map = {
+            "Task ID":        datetime.now().strftime("%Y%m%d%H%M%S"),
+            "Title":          data.get("title", ""),
+            "Assigned To":    data.get("assigned_to", ""),
+            "Priority":       data.get("priority", "Medium"),
+            "Status":         "Pending",
+            "Due Date":       data.get("due_date", ""),
+            "Due Time":       data.get("due_time", ""),
+            "Notes":          data.get("notes", ""),
+            "Source":         data.get("source", "Manual"),
+            "Source Company": data.get("source_company", ""),
+            "Created By":     data.get("created_by", ""),
+            "Created Date":   datetime.now().strftime("%d-%b-%Y"),
+            "Reminder Sent":  "",
+        }
+        ws.append_row([field_map.get(h, "") for h in headers])
         get_due_count.clear()
         return True
     except Exception:

@@ -1,0 +1,28 @@
+name: ATK Task Deadline Reminder
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes — emails tasks due within ~1 hour
+  workflow_dispatch:           # lets you run it manually for testing
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install gspread google-auth
+
+      - name: Send deadline reminders
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+        run: python scripts/atk_deadline_reminder.py

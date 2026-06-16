@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime, date
+from datetime import datetime, date, time
 from utils.sheets import (
     get_tasks_df, add_task, update_task, update_task_fields, delete_task,
     get_due_followups, update_followup_status,
@@ -43,9 +43,13 @@ if due:
                 st.rerun()
     st.markdown("---")
 
+# Show success message after a task was added (survives the form reset rerun)
+if st.session_state.pop("_task_added_msg", None):
+    st.success("✅ Task added successfully.")
+
 # ── Add new task ──────────────────────────────────────────────────────────────
 with st.expander("➕ Add New Task"):
-    with st.form("add_task_form"):
+    with st.form("add_task_form", clear_on_submit=True):
         t1, t2 = st.columns(2)
         with t1:
             title      = st.text_input("Task *")
@@ -53,6 +57,7 @@ with st.expander("➕ Add New Task"):
             priority   = st.selectbox("Priority", TASK_PRIORITIES)
         with t2:
             due_date   = st.date_input("Due Date", value=date.today())
+            due_time   = st.time_input("Due Time (UAE)", value=time(18, 0), step=900)
             created_by = st.selectbox("Created By", USERS)
             notes      = st.text_input("Notes", placeholder="Any extra detail…")
 
@@ -60,19 +65,22 @@ with st.expander("➕ Add New Task"):
             if not title:
                 st.error("Task title is required.")
             else:
-                due_str = due_date.strftime("%d-%b-%Y")
+                due_str  = due_date.strftime("%d-%b-%Y")
+                time_str = due_time.strftime("%I:%M %p")
                 ok = add_task({
                     "title":       title,
                     "assigned_to": assigned,
                     "priority":    priority,
                     "due_date":    due_str,
+                    "due_time":    time_str,
                     "notes":       notes,
                     "created_by":  created_by,
                     "source":      "Manual",
                 })
                 if ok:
-                    notify_task_assigned(title, assigned, created_by, priority, due_str, notes)
-                    st.success("Task added!")
+                    notify_task_assigned(title, assigned, created_by, priority,
+                                         f"{due_str} {time_str}", notes)
+                    st.session_state["_task_added_msg"] = True
                     st.rerun()
                 else:
                     st.error("Could not save. Check Google Sheets connection.")
@@ -122,6 +130,7 @@ for idx, row in df.iterrows():
     priority   = row.get("Priority", "Medium")
     status     = row.get("Status", "Pending")
     due        = row.get("Due Date", "")
+    due_time   = str(row.get("Due Time", "") or "")
     notes      = row.get("Notes", "")
     source     = row.get("Source", "Manual")
     src_co     = row.get("Source Company", "")
@@ -129,11 +138,12 @@ for idx, row in df.iterrows():
 
     p_icon = _PRIORITY_COLOR.get(priority, "⚪")
     s_icon = _STATUS_COLOR.get(status, "🕐")
+    due_display = (f"{due} {due_time}".strip()) or "—"
 
     with st.container(border=True):
         tc, mc = st.columns([8, 1])
         with tc:
-            meta = f"{p_icon} {priority}  ·  👤 {assigned or '—'}  ·  📅 {due or '—'}"
+            meta = f"{p_icon} {priority}  ·  👤 {assigned or '—'}  ·  📅 {due_display}"
             if src_co:
                 meta += f"  ·  {src_co}"
             st.markdown(f"**{s_icon}  {title}**")
@@ -175,6 +185,11 @@ for idx, row in df.iterrows():
                             except Exception:
                                 _dd = date.today()
                             e_due = st.date_input("Due Date", value=_dd)
+                            try:
+                                _dt = datetime.strptime(due_time, "%I:%M %p").time()
+                            except Exception:
+                                _dt = time(18, 0)
+                            e_time = st.time_input("Due Time (UAE)", value=_dt, step=900)
                         e_notes = st.text_input("Notes", value=str(notes))
                         if st.form_submit_button("💾 Save changes", type="primary", use_container_width=True):
                             update_task_fields(idx, {
@@ -182,7 +197,9 @@ for idx, row in df.iterrows():
                                 "Assigned To": e_assigned,
                                 "Priority":    e_priority,
                                 "Due Date":    e_due.strftime("%d-%b-%Y"),
+                                "Due Time":    e_time.strftime("%I:%M %p"),
                                 "Notes":       e_notes,
+                                "Reminder Sent": "",
                             })
                             st.rerun()
 
