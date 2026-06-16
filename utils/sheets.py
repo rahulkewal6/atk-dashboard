@@ -68,6 +68,26 @@ def invalidate_pipeline_cache():
         st.session_state.pop(k, None)
 
 
+def _ensure_columns(ws, headers, needed):
+    """
+    Make sure the worksheet has a header column for each name in `needed`,
+    appending any that are missing. Grows the sheet grid first so writing the
+    new header cell never exceeds the grid limits.
+    Returns the updated headers list.
+    """
+    missing = [c for c in needed if c not in headers]
+    if not missing:
+        return headers
+    try:
+        ws.add_cols(len(missing))  # widen the grid so new columns fit
+    except Exception:
+        pass
+    for col in missing:
+        ws.update_cell(1, len(headers) + 1, col)
+        headers.append(col)
+    return headers
+
+
 def get_pipeline_df():
     def fetch():
         sheet = get_sheet()
@@ -86,10 +106,7 @@ def add_lead(data: dict):
     try:
         ws = sheet.worksheet("Pipeline")
         headers = ws.row_values(1)
-        # Make sure the "Added By" column exists on the live sheet
-        if "Added By" not in headers:
-            ws.update_cell(1, len(headers) + 1, "Added By")
-            headers.append("Added By")
+        headers = _ensure_columns(ws, headers, ("Added By",))
 
         added_by = data.get("added_by", data.get("updated_by", ""))
         field_map = {
@@ -595,11 +612,7 @@ def add_task(data: dict) -> bool:
         return False
     try:
         headers = ws.row_values(1)
-        # Make sure newer columns exist on the live sheet
-        for col in ("Due Time", "Reminder Sent"):
-            if col not in headers:
-                ws.update_cell(1, len(headers) + 1, col)
-                headers.append(col)
+        headers = _ensure_columns(ws, headers, ("Due Time", "Reminder Sent"))
         field_map = {
             "Task ID":        datetime.now().strftime("%Y%m%d%H%M%S"),
             "Title":          data.get("title", ""),
