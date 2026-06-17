@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from utils.sheets import get_pipeline_df, get_tasks_df, get_followups_df, get_due_count
 from utils.constants import STAGE_TIERS, TIER_STYLE
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar
+from utils.auth import require_login, show_user_bar, get_display_name
+from utils.notifications import render_panel
 
 inject_css()
 require_login()
@@ -13,6 +14,9 @@ show_user_bar()
 
 st.title("🏢 ATK Exhibitions — Sales Dashboard")
 st.caption("Your day at a glance.")
+
+# Personal notification panel — what's assigned to whoever is logged in
+render_panel(get_display_name())
 
 _due = get_due_count()
 if _due:

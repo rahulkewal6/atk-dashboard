@@ -695,18 +695,23 @@ def add_followup(data: dict) -> bool:
     if not ws:
         return False
     try:
-        ws.append_row([
-            datetime.now().strftime("%Y%m%d%H%M%S"),
-            data.get("company_name", ""),
-            data.get("exhibition", ""),
-            data.get("stage_at_time", ""),
-            data.get("followup_date", ""),
-            data.get("assigned_to", ""),
-            data.get("notes", ""),
-            "Pending",
-            data.get("created_by", ""),
-            datetime.now().strftime("%d-%b-%Y"),
-        ])
+        headers = ws.row_values(1)
+        headers = _ensure_columns(ws, headers, ("Follow-up Time", "Reminder Sent"))
+        field_map = {
+            "Follow-up ID":   datetime.now().strftime("%Y%m%d%H%M%S"),
+            "Company Name":   data.get("company_name", ""),
+            "Exhibition":     data.get("exhibition", ""),
+            "Stage at Time":  data.get("stage_at_time", ""),
+            "Follow-up Date": data.get("followup_date", ""),
+            "Follow-up Time": data.get("followup_time", ""),
+            "Assigned To":    data.get("assigned_to", ""),
+            "Notes":          data.get("notes", ""),
+            "Status":         "Pending",
+            "Created By":     data.get("created_by", ""),
+            "Created Date":   datetime.now().strftime("%d-%b-%Y"),
+            "Reminder Sent":  "",
+        }
+        ws.append_row([field_map.get(h, "") for h in headers])
         get_due_count.clear()
         return True
     except Exception:

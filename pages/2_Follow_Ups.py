@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, time
 from utils.sheets import (
     get_followups_df, add_followup, update_followup_status,
     update_followup_fields, delete_followup,
@@ -19,6 +19,9 @@ show_user_bar()
 st.title("📅 Follow-ups")
 st.markdown("All scheduled follow-ups — they appear in Tasks automatically when due.")
 
+if st.session_state.pop("_fu_added_msg", None):
+    st.success("✅ Follow-up saved successfully.")
+
 # ── Add Follow-up ─────────────────────────────────────────────────────────────
 with st.expander("➕ Add Follow-up"):
     pipeline_df = get_pipeline_df()
@@ -32,19 +35,21 @@ with st.expander("➕ Add Follow-up"):
         ["✏️ Type a new name"] + companies,
         help="Pick an existing lead, or type any client name (e.g. a cold call).",
     )
-    with st.form("add_followup_form"):
+    with st.form("add_followup_form", clear_on_submit=True):
         if pick == "✏️ Type a new name":
             company_in = st.text_input("Client / Company Name *",
                                        placeholder="e.g. Al Futtaim Group")
         else:
             company_in = pick
             st.caption(f"Company: **{pick}**")
-        a1, a2, a3 = st.columns(3)
+        a1, a2, a3, a4 = st.columns(4)
         with a1:
             fu_date = st.date_input("Follow-up Date *", value=date.today())
         with a2:
-            fu_user = st.selectbox("Assign To", USERS)
+            fu_time = st.time_input("Time (UAE)", value=time(10, 0), step=900)
         with a3:
+            fu_user = st.selectbox("Assign To", USERS)
+        with a4:
             fu_exh = st.selectbox("Exhibition", ["—"] + EXHIBITIONS)
         fu_notes = st.text_input(
             "Notes",
@@ -56,6 +61,7 @@ with st.expander("➕ Add Follow-up"):
             else:
                 company_clean = str(company_in).strip()
                 fu_date_str = fu_date.strftime("%d-%b-%Y")
+                fu_time_str = fu_time.strftime("%I:%M %p")
                 # Pull contact details from the matching lead, if there is one
                 c_name = c_phone = c_email = ""
                 if not pipeline_df.empty and "Company Name" in pipeline_df.columns:
@@ -70,6 +76,7 @@ with st.expander("➕ Add Follow-up"):
                     "exhibition":    "" if fu_exh == "—" else fu_exh,
                     "stage_at_time": "",
                     "followup_date": fu_date_str,
+                    "followup_time": fu_time_str,
                     "assigned_to":   fu_user,
                     "notes":         fu_notes,
                     "created_by":    get_display_name(),
@@ -78,12 +85,12 @@ with st.expander("➕ Add Follow-up"):
                     notify_followup_assigned(
                         assigned_to=fu_user, assigned_by=get_display_name(),
                         company=company_clean, exhibition=("" if fu_exh == "—" else fu_exh),
-                        fu_date=fu_date_str, notes=fu_notes,
+                        fu_date=f"{fu_date_str} {fu_time_str}", notes=fu_notes,
                         contact_name=c_name, contact_phone=c_phone, contact_email=c_email,
                     )
                     get_due_followups.clear()
                     get_due_count.clear()
-                    st.success(f"✅ Follow-up saved — it will show in Tasks on {fu_date.strftime('%d %b %Y')}.")
+                    st.session_state["_fu_added_msg"] = True
                     st.rerun()
                 else:
                     st.error("Could not save. Check Google Sheets connection.")
@@ -150,11 +157,13 @@ for idx, row in df.iterrows():
     company    = row.get("Company Name", "—")
     exh        = row.get("Exhibition",   "")
     fu_date    = row.get("Follow-up Date", "—")
+    fu_time    = str(row.get("Follow-up Time", "") or "")
     assigned   = row.get("Assigned To",  "—")
     stage      = row.get("Stage at Time", "")
     notes      = row.get("Notes",         "")
     status     = row.get("Status",        "Pending")
     created_by = row.get("Created By",    "")
+    when_display = f"{fu_date} {fu_time}".strip()
 
     # Determine if overdue
     is_overdue = False
@@ -170,7 +179,7 @@ for idx, row in df.iterrows():
         lc, mc = st.columns([8, 1])
         with lc:
             st.markdown(f"**{icon}  {company}**" + (f"  ·  {exh}" if exh else ""))
-            st.caption(f"📅 {fu_date}  ·  👤 {assigned}  ·  Status: **{status}**")
+            st.caption(f"📅 {when_display}  ·  👤 {assigned}  ·  Status: **{status}**")
             if stage:
                 st.caption(f"Stage when added: {stage}")
             if notes:
@@ -191,7 +200,7 @@ for idx, row in df.iterrows():
                     with st.form(f"edit_fu_{idx}"):
                         st.caption("✏️ Edit follow-up")
                         e_company = st.text_input("Company / Client", value=str(company))
-                        ec1, ec2 = st.columns(2)
+                        ec1, ec2, ec3 = st.columns(3)
                         with ec1:
                             try:
                                 _fd = pd.to_datetime(fu_date, dayfirst=True).date()
@@ -199,6 +208,12 @@ for idx, row in df.iterrows():
                                 _fd = today
                             e_date = st.date_input("Follow-up Date", value=_fd)
                         with ec2:
+                            try:
+                                _ft = datetime.strptime(fu_time, "%I:%M %p").time()
+                            except Exception:
+                                _ft = time(10, 0)
+                            e_time = st.time_input("Time (UAE)", value=_ft, step=900)
+                        with ec3:
                             e_assigned = st.selectbox(
                                 "Assign To", USERS,
                                 index=USERS.index(assigned) if assigned in USERS else 0,
@@ -208,8 +223,10 @@ for idx, row in df.iterrows():
                             update_followup_fields(idx, {
                                 "Company Name":  e_company,
                                 "Follow-up Date": e_date.strftime("%d-%b-%Y"),
+                                "Follow-up Time": e_time.strftime("%I:%M %p"),
                                 "Assigned To":   e_assigned,
                                 "Notes":         e_notes,
+                                "Reminder Sent": "",
                             })
                             st.rerun()
 

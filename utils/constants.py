@@ -169,7 +169,8 @@ TASK_HEADERS = [
 
 FOLLOWUP_HEADERS = [
     "Follow-up ID", "Company Name", "Exhibition", "Stage at Time",
-    "Follow-up Date", "Assigned To", "Notes", "Status", "Created By", "Created Date",
+    "Follow-up Date", "Follow-up Time", "Assigned To", "Notes", "Status",
+    "Created By", "Created Date", "Reminder Sent",
 ]
 
 TASK_PRIORITIES = ["High", "Medium", "Low"]

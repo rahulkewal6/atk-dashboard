@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, time
 from utils.sheets import (
     get_pipeline_df, add_lead, update_lead_field, delete_lead,
     log_stage_change, get_stage_history, add_followup, get_due_count,
@@ -277,21 +277,26 @@ for idx, row in filtered.iterrows():
                 st.markdown("---")
                 with st.form(f"followup_{idx}"):
                     st.markdown("**📅 Add to Follow-up**")
-                    fa, fb = st.columns(2)
+                    fa, fb, fc = st.columns(3)
                     with fa:
                         fu_date = st.date_input("Follow-up Date", value=date.today(),
                                                 key=f"fu_date_{idx}")
                     with fb:
+                        fu_time = st.time_input("Time (UAE)", value=time(10, 0), step=900,
+                                                key=f"fu_time_{idx}")
+                    with fc:
                         fu_user = st.selectbox("Assign To", USERS, key=f"fu_user_{idx}")
                     fu_notes = st.text_input("Notes", placeholder="e.g. Follow up on quotation",
                                              key=f"fu_notes_{idx}")
                     if st.form_submit_button("Save Follow-up", type="primary"):
                         fu_date_str = fu_date.strftime("%d-%b-%Y")
+                        fu_time_str = fu_time.strftime("%I:%M %p")
                         ok = add_followup({
                             "company_name":  company,
                             "exhibition":    exhibition,
                             "stage_at_time": stage,
                             "followup_date": fu_date_str,
+                            "followup_time": fu_time_str,
                             "assigned_to":   fu_user,
                             "notes":         fu_notes,
                             "created_by":    get_display_name(),
@@ -299,13 +304,14 @@ for idx, row in filtered.iterrows():
                         if ok:
                             notify_followup_assigned(
                                 assigned_to=fu_user, assigned_by=get_display_name(),
-                                company=company, exhibition=exhibition, fu_date=fu_date_str,
+                                company=company, exhibition=exhibition,
+                                fu_date=f"{fu_date_str} {fu_time_str}",
                                 notes=fu_notes,
                                 contact_name=str(row.get("Contact Name", "") or ""),
                                 contact_phone=str(row.get("Contact Phone", "") or ""),
                                 contact_email=str(row.get("Contact Email", "") or ""),
                             )
-                            st.success(f"✅ Follow-up set for {fu_date.strftime('%d %b %Y')} — will appear in Tasks when due.")
+                            st.success(f"✅ Follow-up set for {fu_date.strftime('%d %b %Y')} {fu_time_str} — will appear in Tasks when due.")
                             get_due_count.clear()
                         else:
                             st.error("Could not save. Check Google Sheets connection.")

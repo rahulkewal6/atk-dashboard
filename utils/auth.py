@@ -91,6 +91,20 @@ def show_user_bar():
         f"<span style='color:#555;'>({role})</span></div>",
         unsafe_allow_html=True,
     )
+    # Notification badge — new items assigned to this user
+    try:
+        from utils.notifications import new_count
+        n = new_count(name)
+        if n:
+            st.sidebar.markdown(
+                f"<div style='background:#FF6600;color:#fff;border-radius:8px;"
+                f"padding:6px 10px;margin:6px 0;font-weight:700;font-size:0.85rem;'>"
+                f"🔔 {n} new for you — see Home</div>",
+                unsafe_allow_html=True,
+            )
+    except Exception:
+        pass
+
     if st.sidebar.button("Sign Out", use_container_width=True):
         for key in ["authenticated", "username", "role", "display_name"]:
             st.session_state.pop(key, None)
