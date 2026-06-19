@@ -97,9 +97,10 @@ def show_user_bar():
         n = new_count(name)
         if n:
             st.sidebar.markdown(
-                f"<div style='background:#FF6600;color:#fff;border-radius:8px;"
-                f"padding:6px 10px;margin:6px 0;font-weight:700;font-size:0.85rem;'>"
-                f"🔔 {n} new for you — see Home</div>",
+                f"<a href='/' target='_self' style='display:block;text-align:center;"
+                f"text-decoration:none;background:#FF6600;color:#fff;border-radius:8px;"
+                f"padding:7px 10px;margin:6px 0;font-weight:700;font-size:0.85rem;'>"
+                f"🔔 {n} new for you — see Home</a>",
                 unsafe_allow_html=True,
             )
     except Exception:
