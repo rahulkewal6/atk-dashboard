@@ -165,6 +165,7 @@ TASK_HEADERS = [
     "Task ID", "Title", "Assigned To", "Priority", "Status",
     "Due Date", "Due Time", "Notes", "Source", "Source Company",
     "Created By", "Created Date", "Reminder Sent",
+    "Completed By", "Completed Date",
 ]
 
 FOLLOWUP_HEADERS = [

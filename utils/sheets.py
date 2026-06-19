@@ -612,7 +612,8 @@ def add_task(data: dict) -> bool:
         return False
     try:
         headers = ws.row_values(1)
-        headers = _ensure_columns(ws, headers, ("Due Time", "Reminder Sent"))
+        headers = _ensure_columns(ws, headers,
+                                  ("Due Time", "Reminder Sent", "Completed By", "Completed Date"))
         field_map = {
             "Task ID":        datetime.now().strftime("%Y%m%d%H%M%S"),
             "Title":          data.get("title", ""),

@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from datetime import datetime, date, time
 from utils.sheets import (
     get_tasks_df, add_task, update_task, update_task_fields, delete_task,
@@ -6,7 +7,7 @@ from utils.sheets import (
 )
 from utils.constants import TASK_PRIORITIES, TASK_STATUSES, USERS
 from utils.branding import inject_css, show_logo
-from utils.auth import require_login, show_user_bar, can_modify
+from utils.auth import require_login, show_user_bar, can_modify, get_display_name
 from utils.notify import notify_task_assigned
 
 inject_css()
@@ -88,11 +89,11 @@ with st.expander("➕ Add New Task"):
 st.markdown("---")
 
 # ── Task list ─────────────────────────────────────────────────────────────────
-fc1, fc2 = st.columns(2)
-with fc1:
-    filter_user   = st.selectbox("Filter by person", ["All"] + USERS)
-with fc2:
-    filter_status = st.selectbox("Filter by status", ["Pending & In Progress", "All", "Done"])
+view = st.radio(
+    "View", ["🕐 Active", "✅ Completed", "All"],
+    horizontal=True, label_visibility="collapsed",
+)
+filter_user = st.selectbox("Filter by person", ["All"] + USERS)
 
 df = get_tasks_df()
 
@@ -103,19 +104,25 @@ if df.empty:
 # Apply filters
 if filter_user != "All" and "Assigned To" in df.columns:
     df = df[df["Assigned To"] == filter_user]
-if filter_status == "Pending & In Progress" and "Status" in df.columns:
-    df = df[df["Status"].isin(["Pending", "In Progress"])]
-elif filter_status == "Done" and "Status" in df.columns:
-    df = df[df["Status"] == "Done"]
+if "Status" in df.columns:
+    if view == "🕐 Active":
+        df = df[df["Status"].isin(["Pending", "In Progress"])]
+    elif view == "✅ Completed":
+        df = df[df["Status"] == "Done"]
 
 if df.empty:
-    st.info("No tasks match the current filter.")
+    st.info("No tasks in this view.")
     st.stop()
 
-# Sort: Pending first, then by Due Date
-if "Status" in df.columns:
+is_completed_view = (view == "✅ Completed")
+
+# Sort: completed view → most recently completed first; otherwise Pending first
+df = df.copy()
+if is_completed_view:
+    df["_sort"] = pd.to_datetime(df.get("Completed Date", ""), dayfirst=True, errors="coerce")
+    df = df.sort_values("_sort", ascending=False).drop(columns=["_sort"])
+elif "Status" in df.columns:
     order = {"Pending": 0, "In Progress": 1, "Done": 2}
-    df = df.copy()
     df["_sort"] = df["Status"].map(order).fillna(3)
     df = df.sort_values("_sort").drop(columns=["_sort"])
 
@@ -135,6 +142,8 @@ for idx, row in df.iterrows():
     source     = row.get("Source", "Manual")
     src_co     = row.get("Source Company", "")
     created_by = row.get("Created By", "")
+    comp_by    = str(row.get("Completed By", "") or "")
+    comp_date  = str(row.get("Completed Date", "") or "")
 
     p_icon = _PRIORITY_COLOR.get(priority, "⚪")
     s_icon = _STATUS_COLOR.get(status, "🕐")
@@ -152,6 +161,13 @@ for idx, row in df.iterrows():
                 st.caption(f"📝 {notes}")
             if source != "Manual":
                 st.caption(f"From: {source} follow-up")
+            if status == "Done" and (comp_by or comp_date):
+                done_line = "✅ Completed"
+                if comp_by:
+                    done_line += f" by {comp_by}"
+                if comp_date:
+                    done_line += f" on {comp_date}"
+                st.caption(done_line)
         with mc:
             with st.popover("⋮", use_container_width=True):
                 st.caption("Status")
@@ -161,7 +177,19 @@ for idx, row in df.iterrows():
                     key=f"taskstatus_{idx}", label_visibility="collapsed",
                 )
                 if st.button("Update status", key=f"taskstatusbtn_{idx}", use_container_width=True):
-                    update_task(idx, "Status", new_status)
+                    if new_status == "Done":
+                        update_task_fields(idx, {
+                            "Status": "Done",
+                            "Completed By": get_display_name(),
+                            "Completed Date": date.today().strftime("%d-%b-%Y"),
+                        })
+                    else:
+                        # reopened — clear completion record
+                        update_task_fields(idx, {
+                            "Status": new_status,
+                            "Completed By": "",
+                            "Completed Date": "",
+                        })
                     st.rerun()
 
                 if can_modify(created_by):
