@@ -138,4 +138,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("Digest run complete.")
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        print("Digest hit a transient error — skipping this run.")
+        sys.exit(0)

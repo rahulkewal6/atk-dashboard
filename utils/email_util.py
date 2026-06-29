@@ -23,7 +23,8 @@ def send_email(to_addr, subject, html_body, from_addr, app_password,
         msg["From"] = formataddr((from_name, from_addr))
         msg["To"] = to_addr
         msg.attach(MIMEText(html_body, "html"))
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        # timeout so a slow/blocked SMTP connection can never hang for minutes
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as server:
             server.login(from_addr, app_password)
             server.sendmail(from_addr, [to_addr], msg.as_string())
         return True

@@ -112,4 +112,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+        print("Deadline reminder run complete.")
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        print("Deadline reminder hit a transient error — skipping this run.")
+        # Exit cleanly so a one-off hiccup doesn't spam failure emails
+        sys.exit(0)
