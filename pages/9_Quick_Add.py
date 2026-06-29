@@ -51,6 +51,8 @@ with st.container(border=True):
         image = st.file_uploader("📸 Email screenshot", type=["png", "jpg", "jpeg", "webp"])
     extra = st.text_input("✏️ Or type / add extra detail (optional)",
                           placeholder="e.g. Company XYZ, 10x10, GITEX, brief received")
+    my_notes = st.text_area("🗒️ Your notes / comments (kept exactly as typed)",
+                            placeholder="e.g. Met at the expo, wants eco-friendly materials, budget tight")
 
     if st.button("✨ Analyze", type="primary", use_container_width=True):
         with st.spinner("Reading your input…"):
@@ -62,6 +64,10 @@ with st.container(border=True):
             img_bytes = image.getvalue() if image is not None else None
             img_mime = image.type if image is not None else "image/png"
             result = ai_intake.extract(text=text, image_bytes=img_bytes, image_mime=img_mime)
+            # Keep the user's own comments verbatim, ahead of anything the AI found
+            mn = my_notes.strip()
+            if mn:
+                result["notes"] = (mn + ("\n" + result["notes"] if result.get("notes") else "")).strip()
             result["_transcript"] = text
             st.session_state["qa_result"] = result
         st.rerun()

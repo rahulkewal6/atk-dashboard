@@ -96,9 +96,12 @@ def extract(text="", image_bytes=None, image_mime="image/png"):
             "image_url": {"url": f"data:{image_mime};base64,{b64}"},
         })
 
+    # Model is configurable via secrets — default to the cheap, fast, vision-capable one.
+    # Set OPENAI_LEAD_MODEL = "gpt-4o" (or another) in secrets to upgrade, no code change.
+    model = str(st.secrets.get("OPENAI_LEAD_MODEL", "gpt-4o-mini")).strip() or "gpt-4o-mini"
     try:
         resp = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,
             messages=[
                 {"role": "system", "content": _SYSTEM},
                 {"role": "user", "content": user_content},
