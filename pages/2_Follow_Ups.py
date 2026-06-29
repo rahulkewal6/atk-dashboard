@@ -10,6 +10,7 @@ from utils.constants import USERS, EXHIBITIONS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, can_modify, get_display_name
 from utils.notify import notify_followup_assigned
+from utils.ui import time_select
 
 inject_css()
 require_login()
@@ -46,7 +47,7 @@ with st.expander("➕ Add Follow-up"):
         with a1:
             fu_date = st.date_input("Follow-up Date *", value=date.today())
         with a2:
-            fu_time = st.time_input("Time (UAE)", value=time(10, 0), step=900)
+            fu_time = time_select("Time (UAE)", default="10:00 AM")
         with a3:
             fu_user = st.selectbox("Assign To", USERS)
         with a4:
@@ -61,7 +62,7 @@ with st.expander("➕ Add Follow-up"):
             else:
                 company_clean = str(company_in).strip()
                 fu_date_str = fu_date.strftime("%d-%b-%Y")
-                fu_time_str = fu_time.strftime("%I:%M %p")
+                fu_time_str = fu_time
                 # Pull contact details from the matching lead, if there is one
                 c_name = c_phone = c_email = ""
                 if not pipeline_df.empty and "Company Name" in pipeline_df.columns:
@@ -208,11 +209,8 @@ for idx, row in df.iterrows():
                                 _fd = today
                             e_date = st.date_input("Follow-up Date", value=_fd)
                         with ec2:
-                            try:
-                                _ft = datetime.strptime(fu_time, "%I:%M %p").time()
-                            except Exception:
-                                _ft = time(10, 0)
-                            e_time = st.time_input("Time (UAE)", value=_ft, step=900)
+                            e_time = time_select("Time (UAE)", default=fu_time or "10:00 AM",
+                                                 key=f"efutime_{idx}")
                         with ec3:
                             e_assigned = st.selectbox(
                                 "Assign To", USERS,
@@ -223,7 +221,7 @@ for idx, row in df.iterrows():
                             update_followup_fields(idx, {
                                 "Company Name":  e_company,
                                 "Follow-up Date": e_date.strftime("%d-%b-%Y"),
-                                "Follow-up Time": e_time.strftime("%I:%M %p"),
+                                "Follow-up Time": e_time,
                                 "Assigned To":   e_assigned,
                                 "Notes":         e_notes,
                                 "Reminder Sent": "",

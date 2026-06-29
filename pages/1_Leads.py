@@ -7,6 +7,7 @@ from utils.sheets import (
 )
 from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
+from utils.ui import time_select
 from utils.auth import require_login, show_user_bar, is_admin, can_modify, get_display_name
 from utils.notify import notify_followup_assigned
 
@@ -288,15 +289,15 @@ for idx, row in filtered.iterrows():
                         fu_date = st.date_input("Follow-up Date", value=date.today(),
                                                 key=f"fu_date_{idx}")
                     with fb:
-                        fu_time = st.time_input("Time (UAE)", value=time(10, 0), step=900,
-                                                key=f"fu_time_{idx}")
+                        fu_time = time_select("Time (UAE)", default="10:00 AM",
+                                              key=f"fu_time_{idx}")
                     with fc:
                         fu_user = st.selectbox("Assign To", USERS, key=f"fu_user_{idx}")
                     fu_notes = st.text_input("Notes", placeholder="e.g. Follow up on quotation",
                                              key=f"fu_notes_{idx}")
                     if st.form_submit_button("Save Follow-up", type="primary"):
                         fu_date_str = fu_date.strftime("%d-%b-%Y")
-                        fu_time_str = fu_time.strftime("%I:%M %p")
+                        fu_time_str = fu_time
                         ok = add_followup({
                             "company_name":  company,
                             "exhibition":    exhibition,

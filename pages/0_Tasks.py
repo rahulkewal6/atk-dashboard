@@ -9,6 +9,7 @@ from utils.constants import TASK_PRIORITIES, TASK_STATUSES, USERS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, can_modify, get_display_name
 from utils.notify import notify_task_assigned
+from utils.ui import time_select
 
 inject_css()
 require_login()
@@ -58,7 +59,7 @@ with st.expander("➕ Add New Task"):
             priority   = st.selectbox("Priority", TASK_PRIORITIES)
         with t2:
             due_date   = st.date_input("Due Date", value=date.today())
-            due_time   = st.time_input("Due Time (UAE)", value=time(18, 0), step=900)
+            due_time   = time_select("Due Time (UAE)", default="6:00 PM")
             created_by = st.selectbox("Created By", USERS)
             notes      = st.text_input("Notes", placeholder="Any extra detail…")
 
@@ -67,7 +68,7 @@ with st.expander("➕ Add New Task"):
                 st.error("Task title is required.")
             else:
                 due_str  = due_date.strftime("%d-%b-%Y")
-                time_str = due_time.strftime("%I:%M %p")
+                time_str = due_time
                 ok = add_task({
                     "title":       title,
                     "assigned_to": assigned,
@@ -213,11 +214,8 @@ for idx, row in df.iterrows():
                             except Exception:
                                 _dd = date.today()
                             e_due = st.date_input("Due Date", value=_dd)
-                            try:
-                                _dt = datetime.strptime(due_time, "%I:%M %p").time()
-                            except Exception:
-                                _dt = time(18, 0)
-                            e_time = st.time_input("Due Time (UAE)", value=_dt, step=900)
+                            e_time = time_select("Due Time (UAE)", default=due_time or "6:00 PM",
+                                                 key=f"etime_{idx}")
                         e_notes = st.text_input("Notes", value=str(notes))
                         if st.form_submit_button("💾 Save changes", type="primary", use_container_width=True):
                             update_task_fields(idx, {
@@ -225,7 +223,7 @@ for idx, row in df.iterrows():
                                 "Assigned To": e_assigned,
                                 "Priority":    e_priority,
                                 "Due Date":    e_due.strftime("%d-%b-%Y"),
-                                "Due Time":    e_time.strftime("%I:%M %p"),
+                                "Due Time":    e_time,
                                 "Notes":       e_notes,
                                 "Reminder Sent": "",
                             })
