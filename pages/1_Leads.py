@@ -59,6 +59,7 @@ with st.expander("➕ Add New Lead"):
         with col1:
             company       = st.text_input("Company Name *")
             exhibition    = st.selectbox("Exhibition *", EXHIBITIONS)
+            stand_size    = st.text_input("Stand Size", placeholder="e.g. 10x10")
             source        = st.selectbox("Source *", SOURCES)
             source_custom = st.text_input("Specify source (if Other)", placeholder="e.g. WhatsApp referral")
         with col2:
@@ -83,6 +84,7 @@ with st.expander("➕ Add New Lead"):
                 )
                 ok = add_lead({
                     "company_name": company, "exhibition": exhibition,
+                    "stand_size": stand_size,
                     "source": actual_source, "contact_email": contact_email,
                     "contact_name": contact_name, "contact_phone": contact_phone,
                     "current_stage": default_stage, "notes": notes,
@@ -248,6 +250,10 @@ for idx, row in filtered.iterrows():
                 name  = str(row.get("Contact Name",  "") or "")
                 parts = [p for p in [name, email, phone] if p]
                 st.markdown(f"**Contact:** {'  ·  '.join(parts) if parts else '—'}")
+
+                stand_sz = str(row.get("Stand Size", "") or "")
+                if stand_sz:
+                    st.markdown(f"**Stand Size:** {stand_sz}")
 
                 try:
                     design_count = int(row.get("Design Options Sent", 0) or 0)

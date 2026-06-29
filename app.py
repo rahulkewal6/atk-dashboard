@@ -9,6 +9,7 @@ st.set_page_config(
 
 pg = st.navigation([
     st.Page("home.py",                title="Home",       icon="🏠", default=True),
+    st.Page("pages/9_Quick_Add.py",   title="Quick Add",  icon="✨"),
     st.Page("pages/0_Tasks.py",       title="Tasks",      icon="📋"),
     st.Page("pages/1_Leads.py",       title="Leads",      icon="🎯"),
     st.Page("pages/2_Follow_Ups.py",  title="Follow Ups", icon="📅"),

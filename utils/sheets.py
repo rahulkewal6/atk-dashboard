@@ -106,12 +106,13 @@ def add_lead(data: dict):
     try:
         ws = sheet.worksheet("Pipeline")
         headers = ws.row_values(1)
-        headers = _ensure_columns(ws, headers, ("Added By",))
+        headers = _ensure_columns(ws, headers, ("Stand Size", "Added By"))
 
         added_by = data.get("added_by", data.get("updated_by", ""))
         field_map = {
             "Company Name":        data.get("company_name", ""),
             "Exhibition":          data.get("exhibition", ""),
+            "Stand Size":          data.get("stand_size", ""),
             "Source":              data.get("source", ""),
             "Contact Email":       data.get("contact_email", ""),
             "Contact Name":        data.get("contact_name", ""),
