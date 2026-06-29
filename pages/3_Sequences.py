@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils.apollo_api import get_sequences, get_sequence_detail, get_mailboxes
+from utils.apollo_api import get_sequences, get_sequence_detail, get_mailboxes, get_replied_contacts
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar
 
@@ -169,3 +169,23 @@ if selected:
                 st.info("No email steps configured for this sequence.")
         else:
             st.info("No step detail available.")
+
+        # ── 💬 Who replied in this sequence ───────────────────────────────────
+        st.markdown("---")
+        st.markdown("#### 💬 Replies from clients")
+        with st.spinner("Checking who replied…"):
+            replies = get_replied_contacts(seq_obj.get("id", ""))
+        if replies:
+            st.success(f"{len(replies)} client(s) replied to this sequence.")
+            st.dataframe(pd.DataFrame(replies), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No replies captured for this sequence yet.")
+
+        # ── 👀 Opens — honest note on Apollo's limit ──────────────────────────
+        st.markdown("#### 👀 Opens")
+        st.metric("Emails opened (this sequence)", f"{opened} unique")
+        st.caption(
+            "ℹ️ Apollo's API gives the open *count* but not the list of who opened. "
+            "To see which specific contacts opened, open this sequence inside Apollo "
+            "(the per-contact open activity lives there)."
+        )
