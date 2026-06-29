@@ -11,6 +11,7 @@ from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, can_modify, get_display_name
 from utils.notify import notify_followup_assigned
 from utils.ui import time_select
+from utils.timeutil import time_with_ist
 
 inject_css()
 require_login()
@@ -52,6 +53,7 @@ with st.expander("➕ Add Follow-up"):
             fu_user = st.selectbox("Assign To", USERS)
         with a4:
             fu_exh = st.selectbox("Exhibition", ["—"] + EXHIBITIONS)
+        st.caption("🕐 Times are UAE · India (IST) = UAE + 1h 30m")
         fu_notes = st.text_input(
             "Notes",
             placeholder="e.g. Cold call — client asked to call back after a week",
@@ -86,7 +88,7 @@ with st.expander("➕ Add Follow-up"):
                     notify_followup_assigned(
                         assigned_to=fu_user, assigned_by=get_display_name(),
                         company=company_clean, exhibition=("" if fu_exh == "—" else fu_exh),
-                        fu_date=f"{fu_date_str} {fu_time_str}", notes=fu_notes,
+                        fu_date=f"{fu_date_str} · {time_with_ist(fu_time_str)}", notes=fu_notes,
                         contact_name=c_name, contact_phone=c_phone, contact_email=c_email,
                     )
                     get_due_followups.clear()
@@ -164,7 +166,7 @@ for idx, row in df.iterrows():
     notes      = row.get("Notes",         "")
     status     = row.get("Status",        "Pending")
     created_by = row.get("Created By",    "")
-    when_display = f"{fu_date} {fu_time}".strip()
+    when_display = (f"{fu_date} · {time_with_ist(fu_time)}".strip(" ·")) if str(fu_time).strip() else str(fu_date)
 
     # Determine if overdue
     is_overdue = False

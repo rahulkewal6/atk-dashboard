@@ -10,6 +10,7 @@ from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, can_modify, get_display_name
 from utils.notify import notify_task_assigned
 from utils.ui import time_select
+from utils.timeutil import time_with_ist
 
 inject_css()
 require_login()
@@ -60,6 +61,7 @@ with st.expander("➕ Add New Task"):
         with t2:
             due_date   = st.date_input("Due Date", value=date.today())
             due_time   = time_select("Due Time (UAE)", default="6:00 PM")
+            st.caption("🕐 Times are UAE · India (IST) = UAE + 1h 30m")
             created_by = st.selectbox("Created By", USERS)
             notes      = st.text_input("Notes", placeholder="Any extra detail…")
 
@@ -81,7 +83,7 @@ with st.expander("➕ Add New Task"):
                 })
                 if ok:
                     notify_task_assigned(title, assigned, created_by, priority,
-                                         f"{due_str} {time_str}", notes)
+                                         f"{due_str} · {time_with_ist(time_str)}", notes)
                     st.session_state["_task_added_msg"] = True
                     st.rerun()
                 else:
@@ -148,7 +150,10 @@ for idx, row in df.iterrows():
 
     p_icon = _PRIORITY_COLOR.get(priority, "⚪")
     s_icon = _STATUS_COLOR.get(status, "🕐")
-    due_display = (f"{due} {due_time}".strip()) or "—"
+    if str(due_time).strip():
+        due_display = f"{due} · {time_with_ist(due_time)}".strip(" ·")
+    else:
+        due_display = due or "—"
 
     with st.container(border=True):
         tc, mc = st.columns([8, 1])

@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import gspread
 from utils.constants import USER_EMAILS
 from utils.email_util import send_email, task_due_html, followup_due_html
+from utils.timeutil import time_with_ist
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -75,7 +76,7 @@ def main():
                 to_addr = USER_EMAILS.get(str(rec.get("Assigned To", "")))
                 if not to_addr:
                     continue
-                when = f"{rec.get('Due Date','')} {rec.get('Due Time','')}".strip()
+                when = f"{rec.get('Due Date','')} · {time_with_ist(rec.get('Due Time',''))}".strip(" ·")
                 html = task_due_html(rec.get("Title", ""), when, rec.get("Priority", ""),
                                      rec.get("Notes", ""), link=link)
                 if send_email(to_addr, f"⏰ Task due soon: {rec.get('Title','')}", html, gmail, pwd):
@@ -101,7 +102,7 @@ def main():
                 to_addr = USER_EMAILS.get(str(rec.get("Assigned To", "")))
                 if not to_addr:
                     continue
-                when = f"{rec.get('Follow-up Date','')} {rec.get('Follow-up Time','')}".strip()
+                when = f"{rec.get('Follow-up Date','')} · {time_with_ist(rec.get('Follow-up Time',''))}".strip(" ·")
                 html = followup_due_html(rec.get("Company Name", ""), when,
                                          rec.get("Exhibition", ""), rec.get("Notes", ""), link=link)
                 if send_email(to_addr, f"⏰ Follow-up due soon: {rec.get('Company Name','')}", html, gmail, pwd):

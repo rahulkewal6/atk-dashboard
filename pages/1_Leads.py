@@ -8,6 +8,7 @@ from utils.sheets import (
 from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
 from utils.ui import time_select
+from utils.timeutil import time_with_ist
 from utils.auth import require_login, show_user_bar, is_admin, can_modify, get_display_name
 from utils.notify import notify_followup_assigned
 
@@ -312,7 +313,7 @@ for idx, row in filtered.iterrows():
                             notify_followup_assigned(
                                 assigned_to=fu_user, assigned_by=get_display_name(),
                                 company=company, exhibition=exhibition,
-                                fu_date=f"{fu_date_str} {fu_time_str}",
+                                fu_date=f"{fu_date_str} · {time_with_ist(fu_time_str)}",
                                 notes=fu_notes,
                                 contact_name=str(row.get("Contact Name", "") or ""),
                                 contact_phone=str(row.get("Contact Phone", "") or ""),

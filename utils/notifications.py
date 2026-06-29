@@ -9,6 +9,7 @@ import time as _time
 import streamlit as st
 from datetime import datetime
 from utils.sheets import get_tasks_df, get_followups_df
+from utils.timeutil import time_with_ist
 
 _NEW_DAYS = 2
 _CACHE_TTL = 60
@@ -83,14 +84,16 @@ def render_panel(name):
             st.markdown("**📋 Your tasks**")
             for t in tasks:
                 badge = "🆕 " if _is_new(t.get("Created Date")) else ""
-                due = f"{t.get('Due Date','')} {t.get('Due Time','')}".strip()
-                st.markdown(f"- {badge}{t.get('Title','')}  ·  📅 {due or '—'}  ·  _{t.get('Status','')}_")
+                tm = str(t.get("Due Time", "") or "")
+                due = f"{t.get('Due Date','')} · {time_with_ist(tm)}".strip(" ·") if tm else str(t.get("Due Date", "") or "—")
+                st.markdown(f"- {badge}{t.get('Title','')}  ·  📅 {due}  ·  _{t.get('Status','')}_")
         if followups:
             st.markdown("**📅 Your follow-ups**")
             for f in followups:
                 badge = "🆕 " if _is_new(f.get("Created Date")) else ""
-                when = f"{f.get('Follow-up Date','')} {f.get('Follow-up Time','')}".strip()
-                st.markdown(f"- {badge}{f.get('Company Name','')}  ·  📅 {when or '—'}")
+                ftm = str(f.get("Follow-up Time", "") or "")
+                when = f"{f.get('Follow-up Date','')} · {time_with_ist(ftm)}".strip(" ·") if ftm else str(f.get("Follow-up Date", "") or "—")
+                st.markdown(f"- {badge}{f.get('Company Name','')}  ·  📅 {when}")
 
         l1, l2 = st.columns(2)
         l1.page_link("pages/0_Tasks.py",      label="Go to Tasks",      icon="📋", use_container_width=True)
