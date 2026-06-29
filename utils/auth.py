@@ -85,33 +85,6 @@ def show_user_bar():
     """
     name = get_display_name()
     role = "Admin" if is_admin() else "Editor"
-
-    # Live UAE clock (ticks every second; UAE is UTC+4, no daylight saving)
-    import streamlit.components.v1 as _components
-    with st.sidebar:
-        _components.html(
-            """
-            <div id="atkclk" style="text-align:center;color:#FF6600;font-weight:700;
-                 font-family:Arial,sans-serif;font-size:0.8rem;"></div>
-            <script>
-            function atkTick(){
-              const now = new Date();
-              const u = new Date(now.getTime() + now.getTimezoneOffset()*60000 + 4*3600000);
-              const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-              const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-              let h=u.getHours(); const ap=h>=12?'PM':'AM'; h=h%12||12;
-              const m=String(u.getMinutes()).padStart(2,'0');
-              const s=String(u.getSeconds()).padStart(2,'0');
-              document.getElementById('atkclk').textContent =
-                '🕐 UAE  '+days[u.getDay()]+' '+u.getDate()+' '+mon[u.getMonth()]+
-                '  '+h+':'+m+':'+s+' '+ap;
-            }
-            atkTick(); setInterval(atkTick,1000);
-            </script>
-            """,
-            height=26,
-        )
-
     st.sidebar.markdown(
         f"<div style='color:#AAAAAA; font-size:0.8rem; padding:4px 0;'>"
         f"Logged in as <span style='color:#FF6600; font-weight:700;'>{name}</span> "
