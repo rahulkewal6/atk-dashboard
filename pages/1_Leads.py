@@ -168,7 +168,7 @@ hc1, hc2 = st.columns([3, 1])
 hc1.markdown(f"**{len(filtered)} lead(s)**")
 if pending_count:
     hc2.markdown(
-        f'<p style="color:#FF4D4F;font-weight:700;text-align:right;margin:0;">'
+        f'<p style="color:#D92D20;font-weight:700;text-align:right;margin:0;">'
         f'{pending_count} need your action</p>',
         unsafe_allow_html=True,
     )

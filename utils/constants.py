@@ -68,13 +68,13 @@ STAGE_TIERS = {
 }
 
 TIER_STYLE = {
-    "red":           {"color": "#FF4D4F", "bg": "rgba(255,77,79,0.14)",   "label": "Action needed"},
-    "design_prog":   {"color": "#FFB020", "bg": "rgba(255,176,32,0.14)",  "label": "Design in progress"},
-    "quote_prog":    {"color": "#FF8C42", "bg": "rgba(255,140,66,0.14)",  "label": "Quotation in progress"},
-    "design_client": {"color": "#2ECC71", "bg": "rgba(46,204,113,0.14)",  "label": "Design with client"},
-    "quote_client":  {"color": "#38BDF8", "bg": "rgba(56,189,248,0.14)",  "label": "Quotation with client"},
-    "won":           {"color": "#2ECC71", "bg": "rgba(46,204,113,0.18)",  "label": "Won"},
-    "lost":          {"color": "#8B8B8B", "bg": "rgba(139,139,139,0.14)", "label": "Lost"},
+    "red":           {"color": "#D92D20", "bg": "#FCEBEB", "label": "Action needed"},
+    "design_prog":   {"color": "#B54708", "bg": "#FAEEDA", "label": "Design in progress"},
+    "quote_prog":    {"color": "#C2410C", "bg": "#FAECE7", "label": "Quotation in progress"},
+    "design_client": {"color": "#3B6D11", "bg": "#EAF3DE", "label": "Design with client"},
+    "quote_client":  {"color": "#185FA5", "bg": "#E6F1FB", "label": "Quotation with client"},
+    "won":           {"color": "#3B6D11", "bg": "#EAF3DE", "label": "Won"},
+    "lost":          {"color": "#6B7280", "bg": "#F1EFE8", "label": "Lost"},
 }
 
 STAGE_COLORS = {

@@ -57,10 +57,10 @@ if not df.empty and "Current Stage" in df.columns:
 
 # ── Metric cards ──────────────────────────────────────────────────────────────
 _CARDS = [
-    ("#FF4D4F", action_needed,   "Leads — action needed"),
-    ("#FFB020", designs_to_send, "Designs to send"),
-    ("#5B8DEF", fu_week,         "Follow-ups this week"),
-    ("#FF6600", pending_tasks,   "Pending tasks"),
+    ("#D92D20", action_needed,   "Leads — action needed"),
+    ("#B54708", designs_to_send, "Designs to send"),
+    ("#185FA5", fu_week,         "Follow-ups this week"),
+    ("#C2410C", pending_tasks,   "Pending tasks"),
 ]
 st.markdown(
     '<div class="atk-stats">'

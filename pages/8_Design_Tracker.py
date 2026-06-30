@@ -103,7 +103,7 @@ for idx, row, company, stage, sent, waiting in rows:
             st.caption(f"📐 Brief v{brief_ver}  ·  📤 Sent to designer: {sent_txt}{wait_txt}")
             if chase:
                 st.markdown(
-                    f'<span style="color:#FF4D4F;font-weight:700;">⏰ Waiting {waiting} days — time to chase the designer</span>',
+                    f'<span style="color:#D92D20;font-weight:700;">⏰ Waiting {waiting} days — time to chase the designer</span>',
                     unsafe_allow_html=True,
                 )
         with hr:

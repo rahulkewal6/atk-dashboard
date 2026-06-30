@@ -9,37 +9,34 @@ _LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "logo.png")
 
 
 def inject_css():
-    """Inject ATK brand CSS — orange + black dark mode."""
+    """Inject ATK brand CSS — light content, dark sidebar, orange accents."""
     st.markdown(
         """
         <style>
-        /* ── Metric labels → orange ── */
+        /* ── Metric labels → orange, values dark ── */
         [data-testid="stMetricLabel"] p {
             color: #FF6600 !important;
             font-weight: 600;
         }
-        [data-testid="stMetricValue"] {
-            color: #FFFFFF !important;
-        }
-        [data-testid="stMetricDelta"] {
-            color: #FF9955 !important;
-        }
+        [data-testid="stMetricValue"] { color: #1A1D23 !important; }
+        [data-testid="stMetricDelta"] { color: #BA7517 !important; }
 
-        /* ── Section headings → orange ── */
-        h2, h3 { color: #FF6600 !important; }
+        /* ── Headings → dark, clean ── */
+        h1 { font-weight: 700 !important; letter-spacing: -0.02em; color: #1A1D23 !important; }
+        h2, h3 { font-weight: 600 !important; letter-spacing: -0.01em; color: #1A1D23 !important; }
+        html, body, [data-testid="stAppViewContainer"] * { -webkit-font-smoothing: antialiased; }
 
-        /* ── Sidebar → near-black ── */
+        /* ── Sidebar → dark ── */
         [data-testid="stSidebar"] {
-            background-color: #111111 !important;
-            border-right: 2px solid #FF6600;
+            background-color: #16181D !important;
+            border-right: 1px solid #22242B;
         }
-        [data-testid="stSidebarNav"] a {
-            color: #DDDDDD !important;
-        }
+        [data-testid="stSidebar"] * { color: #C9CCD3; }
+        [data-testid="stSidebarNav"] a { color: #C9CCD3 !important; }
         [data-testid="stSidebarNav"] a:hover,
         [data-testid="stSidebarNav"] a[aria-selected="true"] {
-            color: #FF6600 !important;
-            font-weight: 700;
+            color: #FF7D2B !important;
+            font-weight: 600;
         }
 
         /* ── Primary + submit buttons → orange ── */
@@ -48,75 +45,49 @@ def inject_css():
             background-color: #FF6600 !important;
             color: #FFFFFF !important;
             border: none !important;
-            border-radius: 6px !important;
+            border-radius: 8px !important;
             font-weight: 600 !important;
         }
         .stButton > button:hover,
-        .stFormSubmitButton > button:hover {
-            background-color: #CC5200 !important;
-        }
-
-        /* ── Expanders → orange left border ── */
-        details summary {
-            border-left: 3px solid #FF6600;
-            padding-left: 8px;
-        }
+        .stFormSubmitButton > button:hover { background-color: #E65C00 !important; }
 
         /* ── Dataframe borders ── */
         [data-testid="stDataFrame"] > div {
-            border: 1px solid #333333 !important;
-            border-radius: 6px;
+            border: 1px solid #E6E8EC !important;
+            border-radius: 8px;
         }
 
         /* ── Horizontal rule ── */
-        hr { border-color: #FF6600 !important; opacity: 0.25; }
+        hr { border-color: #E6E8EC !important; opacity: 1; }
 
         /* ── Progress bars ── */
-        .stProgress > div > div > div {
-            background-color: #FF6600 !important;
-        }
+        .stProgress > div > div > div { background-color: #FF6600 !important; }
 
         /* ── Top header bar ── */
-        header[data-testid="stHeader"] {
-            background-color: #0E1117 !important;
-            border-bottom: 2px solid #FF6600;
-        }
-
-        /* ── Metric card background ── */
-        [data-testid="metric-container"] {
-            background-color: #1A1A1A;
-            border: 1px solid #333333;
-            border-radius: 8px;
-            padding: 12px 16px !important;
-        }
+        header[data-testid="stHeader"] { background-color: transparent !important; }
 
         /* ── Warning / info boxes ── */
-        [data-testid="stAlert"] {
-            border-left: 4px solid #FF6600 !important;
-        }
+        [data-testid="stAlert"] { border-left: 4px solid #FF6600 !important; }
 
-        /* ════════ Modern UI layer ════════ */
+        /* ════════ Cards & components (light) ════════ */
 
-        /* Cleaner system font + rendering */
-        html, body, [data-testid="stAppViewContainer"] * {
-            -webkit-font-smoothing: antialiased;
-        }
-        h1 { font-weight: 800 !important; letter-spacing: -0.02em; }
-        h2, h3 { font-weight: 700 !important; letter-spacing: -0.01em; }
-
-        /* Bordered containers → soft cards */
+        /* Bordered containers → white cards */
         [data-testid="stVerticalBlockBorderWrapper"] {
-            border-radius: 14px !important;
-            border: 1px solid #2A2D34 !important;
-            background: #14171D;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+            border-radius: 12px !important;
+            border: 1px solid #E6E8EC !important;
+            background: #FFFFFF;
+            box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+        }
+        /* Sidebar containers stay dark */
+        [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+            background: #22242B; border-color: #2E313A !important; box-shadow: none;
         }
 
-        /* Expanders → rounded cards, no harsh borders */
+        /* Expanders → white rounded cards */
         [data-testid="stExpander"] {
-            border: 1px solid #2A2D34 !important;
+            border: 1px solid #E6E8EC !important;
             border-radius: 12px !important;
-            background: #14171D;
+            background: #FFFFFF;
             margin-bottom: 6px;
         }
         [data-testid="stExpander"] summary {
@@ -124,125 +95,81 @@ def inject_css():
             padding: 10px 14px !important;
             font-weight: 600;
         }
-        [data-testid="stExpander"] summary:hover {
-            color: #FF6600 !important;
-        }
+        [data-testid="stExpander"] summary:hover { color: #FF6600 !important; }
 
-        /* Popover trigger → quiet outline button (not orange) */
+        /* Popover trigger → quiet outline button */
         [data-testid="stPopover"] > div > button,
         [data-testid="stPopover"] button[data-testid^="stPopoverButton"] {
-            background: transparent !important;
-            color: #CCCCCC !important;
-            border: 1px solid #3A3E46 !important;
+            background: #FFFFFF !important;
+            color: #4B5563 !important;
+            border: 1px solid #D7DAE0 !important;
             border-radius: 8px !important;
             font-weight: 500 !important;
         }
         [data-testid="stPopover"] > div > button:hover {
             border-color: #FF6600 !important;
             color: #FF6600 !important;
-            background: rgba(255,102,0,0.08) !important;
+            background: rgba(255,102,0,0.06) !important;
         }
 
-        /* Inputs → rounded, subtle */
+        /* Inputs → rounded */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea,
         [data-testid="stDateInput"] input,
-        [data-testid="stSelectbox"] > div > div {
-            border-radius: 8px !important;
-        }
+        [data-testid="stSelectbox"] > div > div { border-radius: 8px !important; }
 
         /* Lead card header */
-        .atk-lead-head {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-            padding: 4px 0;
-        }
-        .atk-dot {
-            width: 11px; height: 11px;
-            border-radius: 50%;
-            display: inline-block;
-            flex: none;
-        }
+        .atk-lead-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 0; }
+        .atk-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none; }
         .atk-num {
-            color: #6B7280;
-            font-size: 0.82rem;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            min-width: 28px;
+            color: #9AA0A6; font-size: 0.82rem; font-weight: 700;
+            font-variant-numeric: tabular-nums; min-width: 28px;
         }
-        .atk-company {
-            font-size: 1.08rem;
-            font-weight: 700;
-            color: #FFFFFF;
-        }
-        .atk-exh {
-            color: #8A8F98;
-            font-size: 0.84rem;
-            font-weight: 500;
-        }
+        .atk-company { font-size: 1.05rem; font-weight: 600; color: #1A1D23; }
+        .atk-exh { color: #6B7280; font-size: 0.84rem; font-weight: 500; }
         .atk-pill {
-            padding: 3px 12px;
-            border-radius: 999px;
-            font-size: 0.74rem;
-            font-weight: 600;
-            white-space: nowrap;
+            padding: 3px 12px; border-radius: 999px;
+            font-size: 0.74rem; font-weight: 600; white-space: nowrap;
         }
 
-        /* Clickable stat-card buttons on the Leads page */
+        /* Clickable stat-card buttons on the Leads page (light) */
         .st-key-stat_red button, .st-key-stat_design_prog button,
         .st-key-stat_quote_prog button, .st-key-stat_design_client button,
         .st-key-stat_quote_client button, .st-key-stat_won button {
-            background: #14171D !important;
-            border: 1px solid #2A2D34 !important;
+            background: #FFFFFF !important;
+            border: 1px solid #E6E8EC !important;
             border-radius: 12px !important;
             padding: 12px 6px !important;
             font-size: 0.86rem !important;
             font-weight: 700 !important;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+            box-shadow: 0 1px 2px rgba(16,24,40,0.04);
             white-space: normal !important;
             line-height: 1.25 !important;
         }
-        .st-key-stat_red button           { border-top: 3px solid #FF4D4F !important; color: #FF4D4F !important; }
-        .st-key-stat_design_prog button   { border-top: 3px solid #FFB020 !important; color: #FFB020 !important; }
-        .st-key-stat_quote_prog button    { border-top: 3px solid #FF8C42 !important; color: #FF8C42 !important; }
-        .st-key-stat_design_client button { border-top: 3px solid #2ECC71 !important; color: #2ECC71 !important; }
-        .st-key-stat_quote_client button  { border-top: 3px solid #38BDF8 !important; color: #38BDF8 !important; }
-        .st-key-stat_won button           { border-top: 3px solid #2ECC71 !important; color: #2ECC71 !important; }
-        .st-key-stat_red button:hover           { background: rgba(255,77,79,0.10)   !important; }
-        .st-key-stat_design_prog button:hover   { background: rgba(255,176,32,0.10)  !important; }
-        .st-key-stat_quote_prog button:hover    { background: rgba(255,140,66,0.10)  !important; }
+        .st-key-stat_red button           { border-top: 3px solid #E24B4A !important; color: #A32D2D !important; }
+        .st-key-stat_design_prog button   { border-top: 3px solid #EF9F27 !important; color: #854F0B !important; }
+        .st-key-stat_quote_prog button    { border-top: 3px solid #D85A30 !important; color: #993C1D !important; }
+        .st-key-stat_design_client button { border-top: 3px solid #639922 !important; color: #3B6D11 !important; }
+        .st-key-stat_quote_client button  { border-top: 3px solid #378ADD !important; color: #185FA5 !important; }
+        .st-key-stat_won button           { border-top: 3px solid #639922 !important; color: #3B6D11 !important; }
+        .st-key-stat_red button:hover           { background: #FCEBEB !important; }
+        .st-key-stat_design_prog button:hover   { background: #FAEEDA !important; }
+        .st-key-stat_quote_prog button:hover    { background: #FAECE7 !important; }
         .st-key-stat_design_client button:hover,
-        .st-key-stat_won button:hover           { background: rgba(46,204,113,0.10)  !important; }
-        .st-key-stat_quote_client button:hover  { background: rgba(56,189,248,0.10)  !important; }
+        .st-key-stat_won button:hover           { background: #EAF3DE !important; }
+        .st-key-stat_quote_client button:hover  { background: #E6F1FB !important; }
 
-        /* Status summary chips */
-        .atk-stats {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin: 4px 0 14px;
-        }
+        /* Status summary tiles */
+        .atk-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
         .atk-stat {
-            flex: 1;
-            min-width: 130px;
-            border-radius: 12px;
-            padding: 12px 16px;
-            border: 1px solid #2A2D34;
-            background: #14171D;
+            flex: 1; min-width: 130px; border-radius: 12px; padding: 12px 16px;
+            border: 1px solid #E6E8EC; background: #FFFFFF;
+            box-shadow: 0 1px 2px rgba(16,24,40,0.04);
         }
-        .atk-stat .n {
-            font-size: 1.5rem;
-            font-weight: 800;
-            line-height: 1.1;
-        }
+        .atk-stat .n { font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
         .atk-stat .l {
-            font-size: 0.76rem;
-            color: #8A8F98;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            font-size: 0.76rem; color: #6B7280; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em;
         }
         </style>
         """,
