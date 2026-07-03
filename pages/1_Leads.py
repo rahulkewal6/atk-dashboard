@@ -7,7 +7,7 @@ from utils.sheets import (
 )
 from utils.constants import PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS, SOURCES, USERS
 from utils.branding import inject_css, show_logo
-from utils.ui import time_select
+from utils.ui import time_select, greeting_header, pipeline_bars
 from utils.timeutil import time_with_ist
 from utils.auth import require_login, show_user_bar, is_admin, can_modify, get_display_name
 from utils.notify import notify_followup_assigned
@@ -22,35 +22,46 @@ def _tier(stage: str) -> str:
     return STAGE_TIERS.get(stage, "red")
 
 
-def _pill(stage: str) -> str:
+def _initials(company: str) -> str:
+    words = [w for w in str(company).split() if w]
+    return (words[0][0] + (words[1][0] if len(words) > 1 else "")).upper() if words else "?"
+
+
+def _lead_row(lead_no, company, exhibition, source, stage, value) -> str:
+    """Compact reference-style lead row: # · avatar · name/meta · pill · value."""
     s = TIER_STYLE[_tier(stage)]
-    return (
-        f'<span class="atk-pill" style="background:{s["bg"]};color:{s["color"]};'
-        f'border:1px solid {s["color"]}55;">{stage}</span>'
+    meta = "  ·  ".join([m for m in [exhibition, source] if m])
+    value_html = (
+        f'<span style="font-size:0.8rem;color:#374151;font-variant-numeric:tabular-nums;'
+        f'white-space:nowrap;">AED {value}</span>' if str(value).strip() else ""
     )
-
-
-def _lead_header(lead_no: int, company: str, exhibition: str, stage: str) -> str:
-    s = TIER_STYLE[_tier(stage)]
     return (
-        f'<div class="atk-lead-head">'
-        f'<span class="atk-num">#{lead_no}</span>'
-        f'<span class="atk-dot" style="background:{s["color"]};box-shadow:0 0 8px {s["color"]}66;"></span>'
-        f'<span class="atk-company">{company}</span>'
-        f'<span class="atk-exh">{exhibition}</span>'
-        f'{_pill(stage)}'
+        f'<div style="display:flex;align-items:center;gap:12px;padding:2px 0;">'
+        f'<span style="color:#9AA0A6;font-size:0.72rem;min-width:24px;">#{lead_no}</span>'
+        f'<span style="width:34px;height:34px;border-radius:9px;background:{s["bg"]};color:{s["color"]};'
+        f'display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;'
+        f'flex:none;">{_initials(company)}</span>'
+        f'<div style="flex:1;min-width:0;">'
+        f'<div style="font-size:0.93rem;font-weight:600;color:#16181D;">{company}</div>'
+        f'<div style="font-size:0.74rem;color:#8A8F98;">{meta}</div></div>'
+        f'<span class="atk-pill" style="background:{s["bg"]};color:{s["color"]};'
+        f'border:1px solid {s["color"]}40;">● {s["label"]}</span>'
+        f'{value_html}'
         f'</div>'
     )
 
 
-st.title("Leads")
-st.caption(
-    "🔴 action needed from us · 🟡 design in progress · 🟠 quotation in progress · "
-    "🟢 design with client · 🔵 quotation with client"
-)
-
-# Sidebar notification badge for due follow-ups
+# ── Header: greeting + insight ────────────────────────────────────────────────
+_df_head = get_pipeline_df()
+_action_n = 0
+if not _df_head.empty and "Current Stage" in _df_head.columns:
+    _action_n = int((_df_head["Current Stage"].map(lambda s: _tier(str(s))) == "red").sum())
 _due = get_due_count()
+_insight = f'<b style="color:#D14D00;">{_action_n} lead(s) need your action</b>'
+if _due:
+    _insight += f' — {_due} follow-up{"s" if _due > 1 else ""} due'
+greeting_header(get_display_name() or "there", _insight)
+
 if _due:
     st.sidebar.error(f"🔔 {_due} follow-up{'s' if _due > 1 else ''} due — check Tasks")
 
@@ -104,54 +115,33 @@ if df.empty:
     st.info("No leads yet. Add your first lead above.")
     st.stop()
 
-# ── Status summary strip (clickable — filters the list) ──────────────────────
+# ── Pipeline by stage (reference-style bars) ──────────────────────────────────
 _CARD_TIERS = ["red", "design_prog", "quote_prog", "design_client", "quote_client", "won"]
-_CARD_TO_STATUS = {
-    "red":           "🔴 Action needed",
-    "design_prog":   "🟡 Design in progress",
-    "quote_prog":    "🟠 Quotation in progress",
-    "design_client": "🟢 Design with client",
-    "quote_client":  "🔵 Quotation with client",
-    "won":           "✅ Won",
-}
-_STATUS_OPTIONS = ["All"] + list(_CARD_TO_STATUS.values()) + ["❌ Lost"]
-if "lead_status" not in st.session_state:
-    st.session_state["lead_status"] = "All"
-
 if "Current Stage" in df.columns:
     tiers = df["Current Stage"].map(lambda s: _tier(str(s)))
     counts = {t: int((tiers == t).sum()) for t in _CARD_TIERS}
-    sc = st.columns(len(_CARD_TIERS))
-    for col, t in zip(sc, _CARD_TIERS):
-        status_label = _CARD_TO_STATUS[t]
-        selected = st.session_state["lead_status"] == status_label
-        with col:
-            with st.container(key=f"stat_{t}"):
-                if st.button(
-                    f"{counts[t]}  ·  {TIER_STYLE[t]['label']}" + ("  ✕" if selected else ""),
-                    key=f"statbtn_{t}",
-                    use_container_width=True,
-                    help="Click to show only these leads — click again to show all",
-                ):
-                    st.session_state["lead_status"] = "All" if selected else status_label
-                    st.rerun()
+    pipeline_bars(counts, TIER_STYLE)
 
-# ── Filters ───────────────────────────────────────────────────────────────────
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    filter_status = st.selectbox("Status", _STATUS_OPTIONS, key="lead_status")
-with c2:
-    filter_exhibition = st.multiselect("Exhibition", ["All"] + EXHIBITIONS, default=["All"])
-with c3:
-    filter_source = st.multiselect("Source", ["All"] + SOURCES, default=["All"])
-with c4:
-    filter_stage = st.multiselect("Stage", ["All"] + PIPELINE_STAGES, default=["All"])
+# ── Filter chips ──────────────────────────────────────────────────────────────
+_TIER_LABELS = {t: TIER_STYLE[t]["label"] for t in _CARD_TIERS + ["lost"]}
+chip = st.pills(
+    "Filter", ["All"] + [_TIER_LABELS[t] for t in _CARD_TIERS + ["lost"]],
+    selection_mode="single", default="All", label_visibility="collapsed",
+)
+_LABEL_TO_TIER = {v: k for k, v in _TIER_LABELS.items()}
+
+with st.expander("More filters"):
+    c2, c3, c4 = st.columns(3)
+    with c2:
+        filter_exhibition = st.multiselect("Exhibition", ["All"] + EXHIBITIONS, default=["All"])
+    with c3:
+        filter_source = st.multiselect("Source", ["All"] + SOURCES, default=["All"])
+    with c4:
+        filter_stage = st.multiselect("Stage", ["All"] + PIPELINE_STAGES, default=["All"])
 
 filtered = df.copy()
-_STATUS_TO_TIER = {v: k for k, v in _CARD_TO_STATUS.items()}
-_STATUS_TO_TIER["❌ Lost"] = "lost"
-if filter_status != "All" and "Current Stage" in filtered.columns:
-    want = _STATUS_TO_TIER[filter_status]
+if chip and chip != "All" and "Current Stage" in filtered.columns:
+    want = _LABEL_TO_TIER[chip]
     filtered = filtered[filtered["Current Stage"].map(lambda s: _tier(str(s))) == want]
 if "All" not in filter_exhibition and "Exhibition" in filtered.columns:
     filtered = filtered[filtered["Exhibition"].isin(filter_exhibition)]
@@ -160,18 +150,7 @@ if "All" not in filter_source and "Source" in filtered.columns:
 if "All" not in filter_stage and "Current Stage" in filtered.columns:
     filtered = filtered[filtered["Current Stage"].isin(filter_stage)]
 
-# Header with attention counter
-pending_count = 0
-if "Current Stage" in filtered.columns:
-    pending_count = int((filtered["Current Stage"].map(lambda s: _tier(str(s))) == "red").sum())
-hc1, hc2 = st.columns([3, 1])
-hc1.markdown(f"**{len(filtered)} lead(s)**")
-if pending_count:
-    hc2.markdown(
-        f'<p style="color:#D92D20;font-weight:700;text-align:right;margin:0;">'
-        f'{pending_count} need your action</p>',
-        unsafe_allow_html=True,
-    )
+st.caption(f"{len(filtered)} lead(s)")
 
 if filtered.empty:
     st.info("No leads match the current filters.")
@@ -191,14 +170,19 @@ for idx, row in filtered.iterrows():
     company    = str(row.get("Company Name", "Unknown"))
     exhibition = str(row.get("Exhibition", ""))
 
-    with st.container(border=True):
+    with st.container(border=True, key=f"lead_{idx}"):
 
-        # ── Header row: name + pill + inline stage updater + ⋮ menu ──────────
+        # ── Header row: compact lead row + inline stage updater + ⋮ menu ─────
         # Owner = whoever added the lead (older rows fall back to last updater)
         owner = str(row.get("Added By", "") or row.get("Last Updated By", ""))
         hl, hr, hm = st.columns([5, 1.4, 0.7])
         with hl:
-            st.markdown(_lead_header(idx + 1, company, exhibition, stage), unsafe_allow_html=True)
+            st.markdown(
+                _lead_row(idx + 1, company, exhibition,
+                          str(row.get("Source", "") or ""), stage,
+                          str(row.get("Client Quote (AED)", "") or "")),
+                unsafe_allow_html=True,
+            )
         with hr:
             with st.popover("✏️ Update stage", use_container_width=True):
                 q_stage = st.selectbox(

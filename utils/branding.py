@@ -159,6 +159,36 @@ def inject_css():
         .st-key-stat_won button:hover           { background: #EAF3DE !important; }
         .st-key-stat_quote_client button:hover  { background: #E6F1FB !important; }
 
+        /* Compact lead rows (containers keyed lead_*) */
+        [class*="st-key-lead_"] {
+            padding: 6px 14px !important;
+        }
+        [class*="st-key-lead_"] [data-testid="stVerticalBlock"] {
+            gap: 0.3rem !important;
+        }
+        [class*="st-key-lead_"] [data-testid="stExpander"] {
+            border: none !important;
+            background: transparent;
+            margin: 0;
+        }
+        [class*="st-key-lead_"] [data-testid="stExpander"] summary {
+            padding: 2px 0 !important;
+            font-size: 0.78rem;
+            color: #8A8F98;
+        }
+
+        /* Filter pills → chip look */
+        [data-testid="stPills"] button {
+            border-radius: 999px !important;
+            font-size: 0.8rem !important;
+        }
+        [data-testid="stPills"] button[kind="pillsActive"],
+        [data-testid="stPills"] button[aria-checked="true"] {
+            background: #FF6600 !important;
+            color: #fff !important;
+            border-color: #FF6600 !important;
+        }
+
         /* Status summary tiles */
         .atk-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
         .atk-stat {

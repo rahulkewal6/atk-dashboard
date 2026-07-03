@@ -6,17 +6,12 @@ from utils.constants import STAGE_TIERS, TIER_STYLE
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, get_display_name
 from utils.notifications import render_panel
+from utils.ui import greeting_header
 
 inject_css()
 require_login()
 show_logo()
 show_user_bar()
-
-st.title("🏢 ATK Exhibitions — Sales Dashboard")
-st.caption("Your day at a glance.")
-
-# Personal notification panel — what's assigned to whoever is logged in
-render_panel(get_display_name())
 
 _due = get_due_count()
 if _due:
@@ -54,6 +49,20 @@ if not df.empty and "Current Stage" in df.columns:
     stages = df["Current Stage"].astype(str)
     action_needed   = int((stages.map(lambda s: STAGE_TIERS.get(s, "")) == "red").sum())
     designs_to_send = int(stages.isin(_DESIGN_PENDING_STAGES).sum())
+
+# ── Greeting + insight (reference-style briefing header) ─────────────────────
+_bits = []
+if action_needed:
+    _bits.append(f'<b style="color:#D14D00;">{action_needed} lead(s) need your action</b>')
+if fu_week:
+    _bits.append(f"{fu_week} follow-up(s) this week")
+if pending_tasks:
+    _bits.append(f"{pending_tasks} pending task(s)")
+greeting_header(get_display_name() or "there",
+                " — ".join(_bits) if _bits else "All clear today. 🎉")
+
+# Personal notification panel — what's assigned to whoever is logged in
+render_panel(get_display_name())
 
 # ── Metric cards ──────────────────────────────────────────────────────────────
 _CARDS = [
