@@ -4,7 +4,10 @@
 Streamlit multi-page dashboard for **ATK Exhibition Organizers LLC, Dubai** (stand design & build company).
 Owner: Rahul Kewal (rahulkewal6@gmail.com). Team: Bhavika (editor), Deepak (editor).
 
-Deployed on **Streamlit Cloud**, code on GitHub repo `atk-dashboard`.
+Deployed on **Streamlit Cloud** (live: https://atkdashboard.streamlit.app), code on GitHub repo `atk-dashboard` (public).
+
+> **Full internal record:** `PROJECT_LOG.md` (gitignored) holds the complete decision log,
+> changelog, credentials, rollback details, and pending work. Read it first on long sessions.
 
 ---
 
@@ -24,6 +27,7 @@ rsync -av \
   --exclude='SETUP.md' \
   --exclude='RULES.md' \
   --exclude='STRATEGY.md' \
+  --exclude='PROJECT_LOG.md' \
   "/Users/deepakkewal/Desktop/Dashboard build/" \
   "/Users/deepakkewal/Desktop/atk-dashboard/"
 ```
@@ -34,7 +38,7 @@ rsync -av \
 
 ## NEVER do these things
 - **NEVER commit `.streamlit/secrets.toml`** — contains all API keys, passwords, service account
-- **NEVER commit `.claude/`, `SETUP.md`, `RULES.md`, `STRATEGY.md`** — internal only
+- **NEVER commit `.claude/`, `SETUP.md`, `RULES.md`, `STRATEGY.md`, `PROJECT_LOG.md`** — internal only
 - **NEVER use `google-generativeai`** — wrong SDK. Use `google-genai>=1.0.0`
 - **NEVER create new standalone Google Spreadsheets** — service account has 0 GB Drive quota (gets 403)
 - **NEVER use Python 3.10+ type syntax** (`str | None`) — Streamlit Cloud runs Python 3.9. Use `Optional[str]` or `str = None`
@@ -49,14 +53,16 @@ Pages must NOT call `st.set_page_config` — it is called once in `app.py`.
 
 | File | Page | Notes |
 |------|------|-------|
-| `home.py` | 🏠 Home | Metrics: action needed, designs to send, follow-ups this week, pending tasks |
-| `pages/0_Tasks.py` | 📋 Tasks | Manual tasks + due follow-up notifications |
-| `pages/1_Leads.py` | 🔴 Leads | Pipeline: 3-color tiers, inline stage popover, delete, lead # |
-| `pages/2_Follow_Ups.py` | 📅 Follow Ups | Scheduled follow-ups (from leads or added directly) |
-| `pages/3_Sequences.py` | Sequences | Apollo email sequences |
-| `pages/4_Reports.py` | Reports | Dashboard metrics |
-| `pages/5_Calendar.py` | Calendar | Exhibition event calendar |
-| `pages/6_Database.py` | Database | Exhibitor database (upload + call tracking) |
+| `home.py` | 🏠 Home | Metric tiles + per-user 🔔 notification panel (open tasks/follow-ups) |
+| `pages/9_Quick_Add.py` | ✨ Quick Add | Voice (Whisper) + screenshot (GPT-4o vision) → new lead OR stage update, confirm-first |
+| `pages/0_Tasks.py` | 📋 Tasks | Tasks: ⋮ edit/delete, Active/Completed/All views, completion history, due time |
+| `pages/1_Leads.py` | 🎯 Leads | Pipeline: 6-tier status cards, inline stage popover, ⋮ delete, lead #, Stand Size |
+| `pages/2_Follow_Ups.py` | 📅 Follow Ups | Follow-ups w/ time; ⋮ edit/delete; appear in Tasks banner when due |
+| `pages/8_Design_Tracker.py` | 🎨 Designs | Briefs pending with the designer; days waiting; chase-task action |
+| `pages/3_Sequences.py` | ✉️ Sequences | Apollo sequences + "who replied" list (opens-per-person not in Apollo API) |
+| `pages/4_Reports.py` | 📊 Reports | Dashboard metrics |
+| `pages/5_Calendar.py` | 🗓️ Calendar | Exhibition event calendar |
+| `pages/6_Database.py` | 🗂️ Database | Exhibitor database (upload + call tracking) |
 | `pages/7_List_Maker.py` | 🕷️ List Maker | AI web scraper → Excel download |
 
 ---
@@ -121,11 +127,31 @@ Defined in `utils/constants.py` → `PIPELINE_STAGES`, grouped by `STAGE_TIERS` 
 
 ---
 
+## Email + notifications + time (added after initial build)
+- **Emails:** `utils/email_util.py` (pure SMTP+HTML, shared by app & GitHub Actions), `utils/notify.py`
+  (instant in-app sends). Instant emails on task/follow-up assignment. Scheduled via GitHub Actions:
+  `.github/workflows/atk_digest.yml` (Sun + Mon/Wed/Fri) and `atk_deadline.yml` (every 15 min, ~1 hr before due).
+  Gmail account `atk.dashboard0@gmail.com` + App Password. GitHub repo Secrets: GMAIL_ADDRESS,
+  GMAIL_APP_PASSWORD, GOOGLE_SHEET_ID, GCP_SERVICE_ACCOUNT, DASHBOARD_URL.
+- **Time:** all times stored in **UAE (UTC+4)**; India (IST = UAE + 1h30m) shown alongside via
+  `utils/timeutil.py` (`time_with_ist`). Time picker = 12-hr AM/PM 15-min dropdown (`utils/ui.py` `time_select`).
+- **Notifications:** `utils/notifications.py` — Home panel of the user's open items; sidebar badge uses
+  `st.switch_page` (NOT an `<a href>` — a full reload logs the user out).
+- **AI intake:** `utils/ai_intake.py` — Whisper transcribe + GPT-4o-mini vision → structured lead JSON.
+  Model via `OPENAI_LEAD_MODEL` secret (default gpt-4o-mini). Confirm-first, never auto-saves.
+
+## Theme (light + dark sidebar, 2026-06-30)
+- `.streamlit/config.toml`: `base="light"` + `[theme.sidebar]` dark. `utils/branding.py` = white cards,
+  dark sidebar, orange accents. `TIER_STYLE` colors are light-theme (dark text on light tint).
+- **Rollback:** dark theme saved as Desktop backup folder + git tag `dark-theme-v1`.
+
 ## Shared utilities
-- `utils/sheets.py` — all Google Sheets read/write functions
-- `utils/constants.py` — PIPELINE_STAGES, STAGE_COLORS, EXHIBITIONS, SOURCES, USERS, headers
+- `utils/sheets.py` — all Google Sheets read/write; `_ensure_columns` (grows grid before adding cols);
+  session read-cache; row = df-index + 2.
+- `utils/constants.py` — PIPELINE_STAGES, STAGE_TIERS, TIER_STYLE, EXHIBITIONS (incl. GITEX), SOURCES,
+  USERS (Rahul/Bhavika/Deepak), USER_EMAILS, all `*_HEADERS`.
 - `utils/branding.py` — `inject_css()`, `show_logo()` — called on every page
-- `utils/auth.py` — `require_login()`, `show_user_bar()`, `is_admin()`
+- `utils/auth.py` — `require_login()`, `show_user_bar()`, `is_admin()`, `get_display_name()`, `can_modify(owner)`
 - `utils/scraper.py` — Jina.ai + AI scraping functions for List Maker
 
 ---
@@ -133,10 +159,14 @@ Defined in `utils/constants.py` → `PIPELINE_STAGES`, grouped by `STAGE_TIERS` 
 ## Secrets structure (never commit — reference only)
 ```toml
 APOLLO_API_KEY = "..."
-GEMINI_API_KEY = "AQ...."        # Google AI Studio
-OPENAI_API_KEY = "sk-..."        # OpenAI (primary for List Maker)
-GOOGLE_SHEET_ID = "..."          # Main ATK Dashboard spreadsheet
-EXHIBITOR_SHEET_ID = "..."       # ATK Exhibitor Database spreadsheet
+GEMINI_API_KEY = "AQ...."           # Google AI Studio
+OPENAI_API_KEY = "sk-..."           # OpenAI (List Maker + Quick Add AI)
+OPENAI_LEAD_MODEL = "gpt-4o-mini"   # optional — upgrade Quick Add model, no code change
+GOOGLE_SHEET_ID = "..."             # Main ATK Dashboard spreadsheet
+EXHIBITOR_SHEET_ID = "..."          # ATK Exhibitor Database spreadsheet
+GMAIL_ADDRESS = "atk.dashboard0@gmail.com"
+GMAIL_APP_PASSWORD = "..."          # 16-char Gmail App Password (2FA on)
+DASHBOARD_URL = "https://atkdashboard.streamlit.app"
 
 [users.rahul]   # admin
 [users.bhavika] # editor
@@ -144,13 +174,15 @@ EXHIBITOR_SHEET_ID = "..."       # ATK Exhibitor Database spreadsheet
 
 [gcp_service_account]  # full service account JSON
 ```
+GitHub repo Secrets (for the email Actions) mirror: GMAIL_ADDRESS, GMAIL_APP_PASSWORD,
+GOOGLE_SHEET_ID, GCP_SERVICE_ACCOUNT, DASHBOARD_URL.
 
 ---
 
 ## Coding standards for this project
 - No comments unless the WHY is non-obvious
 - Python 3.9 compatible syntax only
-- Streamlit 1.32+ features OK (`st.container(border=True)`, etc.)
+- **streamlit>=1.40** (st.audio_input, `[theme.sidebar]`); `st.container(border=True)`, popovers etc. OK
 - Keep all business logic in `utils/` — pages are thin UI layers
 - `st.rerun()` after any Google Sheets write to refresh state
 - Use `st.cache_data(ttl=60)` on public read functions, never on private helpers
