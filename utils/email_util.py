@@ -3,10 +3,13 @@ Pure email sending + HTML builders — NO Streamlit dependency, so this can be
 imported by both the Streamlit app (instant emails) and the GitHub Action
 digest script (scheduled emails).
 """
+import io
 import smtplib
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
+from email import encoders
 
 _ORANGE = "#FF6600"
 _DARK = "#1A1A1A"
@@ -27,6 +30,65 @@ def send_email(to_addr, subject, html_body, from_addr, app_password,
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as server:
             server.login(from_addr, app_password)
             server.sendmail(from_addr, [to_addr], msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+def compress_image(name, data, max_bytes=1_800_000, max_dim=1800):
+    """Shrink a large image so email attachments stay under Gmail's 25 MB cap.
+    Returns (new_name, new_bytes, mime). Non-images or failures pass through."""
+    lower = name.lower()
+    is_img = lower.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"))
+    if not is_img or len(data) <= max_bytes:
+        mime = "image/png" if lower.endswith(".png") else "image/jpeg"
+        return name, data, (mime if is_img else "application/octet-stream")
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(data))
+        img = img.convert("RGB")
+        w, h = img.size
+        scale = min(1.0, max_dim / max(w, h))
+        if scale < 1.0:
+            img = img.resize((int(w * scale), int(h * scale)))
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=80, optimize=True)
+        new = out.getvalue()
+        base = name.rsplit(".", 1)[0]
+        return f"{base}.jpg", new, "image/jpeg"
+    except Exception:
+        return name, data, "application/octet-stream"
+
+
+def send_email_with_attachments(to_addrs, subject, html_body, from_addr, app_password,
+                                attachments=None, cc_addrs=None, reply_to=None,
+                                from_name="ATK Exhibitions"):
+    """Send an HTML email with file attachments. attachments = list of (filename, bytes, mimetype).
+    Returns True on success, never raises."""
+    to_addrs = [a for a in (to_addrs or []) if a]
+    cc_addrs = [a for a in (cc_addrs or []) if a]
+    if not (to_addrs and from_addr and app_password):
+        return False
+    try:
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subject
+        msg["From"] = formataddr((from_name, from_addr))
+        msg["To"] = ", ".join(to_addrs)
+        if cc_addrs:
+            msg["Cc"] = ", ".join(cc_addrs)
+        if reply_to:
+            msg["Reply-To"] = reply_to
+        msg.attach(MIMEText(html_body, "html"))
+        for fname, fbytes, fmime in (attachments or []):
+            maintype, _, subtype = (fmime or "application/octet-stream").partition("/")
+            part = MIMEBase(maintype or "application", subtype or "octet-stream")
+            part.set_payload(fbytes)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", "attachment", filename=fname)
+            msg.attach(part)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
+            server.login(from_addr, app_password)
+            server.sendmail(from_addr, to_addrs + cc_addrs, msg.as_string())
         return True
     except Exception:
         return False

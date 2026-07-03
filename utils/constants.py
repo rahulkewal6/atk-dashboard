@@ -178,6 +178,23 @@ FOLLOWUP_HEADERS = [
 TASK_PRIORITIES = ["High", "Medium", "Low"]
 TASK_STATUSES   = ["Pending", "In Progress", "Done"]
 
+# ── Design brief (sent to the in-house designer) ─────────────────────────────
+DESIGNER_EMAIL = "imraankhan3ddesigner@gmail.com"
+BRIEF_CC       = ["marketing@atkexhibitions.com", "bhavika@atkexhibitions.com"]
+BRIEF_REPLY_TO = "marketing@atkexhibitions.com"
+LAYOUTS        = ["All sides open", "3 sides open", "2 sides open", "1 side open"]
+MEETING_ROOMS  = ["None", "Open", "Semi-open", "Closed"]
+BRIEF_FEATURES = [
+    "Reception counter", "Storage room", "Pantry", "Coffee counter",
+    "Product display podium", "Glass showcase",
+]
+BRIEF_HEADERS = [
+    "Brief ID", "Company Name", "Exhibition", "Stand Size", "Location", "Layout",
+    "Design Direction", "Brand Colours", "Meeting Room", "Features", "AV / Digital",
+    "Products", "Notes", "First Concept Deadline", "Attachments", "Sent To",
+    "Sent By", "Sent Date",
+]
+
 CALENDAR_HEADERS = [
     "Event Name", "Venue", "City", "Start Date", "End Date",
     "Exhibitor Count", "Official URL", "Verification Status",

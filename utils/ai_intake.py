@@ -9,7 +9,7 @@ import io
 import json
 import base64
 import streamlit as st
-from utils.constants import EXHIBITIONS, PIPELINE_STAGES
+from utils.constants import EXHIBITIONS, PIPELINE_STAGES, LAYOUTS, MEETING_ROOMS, BRIEF_FEATURES
 
 
 def have_openai():
@@ -123,4 +123,68 @@ def extract(text="", image_bytes=None, image_mime="image/png"):
         out["exhibition"] = "Other" if out["exhibition"] else ""
     if out["stage"] not in PIPELINE_STAGES:
         out["stage"] = ""
+    return out
+
+
+def _empty_brief():
+    return {
+        "size": "", "location": "", "layout": "", "design_direction": "",
+        "brand_colours": "", "meeting_room": "", "features": [], "av": "",
+        "products": "", "notes": "",
+    }
+
+
+def extract_brief(text="", image_bytes=None, image_mime="image/png"):
+    """Read a client brief (pasted text / screenshot / voice) into design-brief fields."""
+    client = _client()
+    if not client:
+        return _empty_brief()
+
+    prompt = (
+        "Extract an exhibition-stand design brief from the input and return ONLY JSON with keys:\n"
+        '{ "size": string (e.g. "8m x 10m (80 sqm)"),\n'
+        '  "location": string (hall / booth),\n'
+        '  "layout": one of ' + json.dumps(LAYOUTS) + ',\n'
+        '  "design_direction": string,\n'
+        '  "brand_colours": string,\n'
+        '  "meeting_room": one of ' + json.dumps(MEETING_ROOMS) + ',\n'
+        '  "features": array containing any of ' + json.dumps(BRIEF_FEATURES) + ',\n'
+        '  "av": string (screens/AV),\n'
+        '  "products": string,\n'
+        '  "notes": string }\n'
+        "Only include what is present. Empty string / empty array if unknown. JSON only."
+    )
+    user_content = [{"type": "text", "text": prompt}]
+    if text:
+        user_content.append({"type": "text", "text": f"Client brief / notes:\n{text}"})
+    if image_bytes:
+        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        user_content.append({"type": "image_url",
+                             "image_url": {"url": f"data:{image_mime};base64,{b64}"}})
+
+    model = str(st.secrets.get("OPENAI_LEAD_MODEL", "gpt-4o-mini")).strip() or "gpt-4o-mini"
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": _SYSTEM},
+                      {"role": "user", "content": user_content}],
+            temperature=0,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(resp.choices[0].message.content)
+    except Exception:
+        return _empty_brief()
+
+    out = _empty_brief()
+    for k in out:
+        if k not in data or data[k] is None:
+            continue
+        if k == "features":
+            out[k] = [f for f in data[k] if f in BRIEF_FEATURES] if isinstance(data[k], list) else []
+        else:
+            out[k] = str(data[k]).strip()
+    if out["layout"] not in LAYOUTS:
+        out["layout"] = ""
+    if out["meeting_room"] not in MEETING_ROOMS:
+        out["meeting_room"] = ""
     return out

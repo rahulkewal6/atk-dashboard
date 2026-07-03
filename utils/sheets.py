@@ -4,7 +4,7 @@ import gspread
 import pandas as pd
 import streamlit as st
 from datetime import datetime
-from utils.constants import EXHIBITOR_HEADERS, TASK_HEADERS, FOLLOWUP_HEADERS
+from utils.constants import EXHIBITOR_HEADERS, TASK_HEADERS, FOLLOWUP_HEADERS, BRIEF_HEADERS
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -790,6 +790,39 @@ def get_due_followups() -> list:
 def get_due_count() -> int:
     """Cached count of due follow-ups — used for notification badge."""
     return len(get_due_followups())
+
+
+def add_design_brief(data: dict) -> bool:
+    """Record a design brief sent to the designer (ATK Design Briefs tab)."""
+    ws = _get_or_create_tab("ATK Design Briefs", BRIEF_HEADERS)
+    if not ws:
+        return False
+    try:
+        ws.append_row([
+            datetime.now().strftime("%Y%m%d%H%M%S"),
+            data.get("company", ""), data.get("exhibition", ""), data.get("size", ""),
+            data.get("location", ""), data.get("layout", ""),
+            data.get("design_direction", ""), data.get("brand_colours", ""),
+            data.get("meeting_room", ""), ", ".join(data.get("features", []) or []),
+            data.get("av", ""), data.get("products", ""), data.get("notes", ""),
+            data.get("deadline", ""), data.get("attachments", ""),
+            data.get("sent_to", ""), data.get("sent_by", ""),
+            datetime.now().strftime("%d-%b-%Y %H:%M"),
+        ])
+        return True
+    except Exception:
+        return False
+
+
+def get_design_briefs_df() -> pd.DataFrame:
+    ws = _get_or_create_tab("ATK Design Briefs", BRIEF_HEADERS)
+    if not ws:
+        return pd.DataFrame(columns=BRIEF_HEADERS)
+    try:
+        data = ws.get_all_records()
+        return pd.DataFrame(data) if data else pd.DataFrame(columns=BRIEF_HEADERS)
+    except Exception:
+        return pd.DataFrame(columns=BRIEF_HEADERS)
 
 
 def delete_event_exhibitors(event_name: str) -> bool:

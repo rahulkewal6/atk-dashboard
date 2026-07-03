@@ -213,6 +213,13 @@ for idx, row in filtered.iterrows():
                     st.rerun()
         with hm:
             with st.popover("⋮", use_container_width=True):
+                if st.button("📐 Send Design Brief", key=f"brief_{idx}", use_container_width=True):
+                    st.session_state["brief_prefill"] = {
+                        "company": company, "exhibition": exhibition,
+                        "size": str(row.get("Stand Size", "") or ""), "row_number": idx + 1,
+                    }
+                    st.switch_page("pages/10_Design_Brief.py")
+                st.divider()
                 if can_modify(owner):
                     st.caption("Edit all fields in the **Details** section below.")
                     st.divider()
