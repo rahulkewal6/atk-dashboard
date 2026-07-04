@@ -13,6 +13,40 @@ require_login()
 show_logo()
 show_user_bar()
 
+# Home-only dark skin (this CSS runs only while the Home page renders)
+st.markdown(
+    """
+    <style>
+    [data-testid="stAppViewContainer"] { background: #0D0E10 !important; }
+    [data-testid="stAppViewContainer"] p,
+    [data-testid="stAppViewContainer"] li,
+    [data-testid="stAppViewContainer"] span { color: #D6D9DE; }
+    [data-testid="stAppViewContainer"] h1,
+    [data-testid="stAppViewContainer"] h2,
+    [data-testid="stAppViewContainer"] h3 { color: #FFFFFF !important; }
+    [data-testid="stAppViewContainer"] [data-testid="stVerticalBlockBorderWrapper"] {
+        background: #16181D !important;
+        border-color: #26282E !important;
+        box-shadow: none;
+    }
+    [data-testid="stAppViewContainer"] .atk-stat {
+        background: #16181D !important;
+        border-color: #26282E !important;
+    }
+    [data-testid="stAppViewContainer"] .atk-stat .l { color: #8A8F98 !important; }
+    [data-testid="stMetricValue"] { color: #FFFFFF !important; }
+    [data-testid="stAppViewContainer"] hr { border-color: #26282E !important; }
+    [data-testid="stPageLink"] a { color: #D6D9DE !important; border: 1px solid #2E313A;
+        border-radius: 8px; }
+    [data-testid="stPageLink"] a:hover { color: #FF7D2B !important; border-color: #FF6600; }
+    [data-testid="stAppViewContainer"] [data-testid="stDataFrame"] > div {
+        border-color: #26282E !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 _due = get_due_count()
 if _due:
     st.sidebar.error(f"🔔 {_due} follow-up{'s' if _due > 1 else ''} due — check Tasks")
@@ -53,23 +87,24 @@ if not df.empty and "Current Stage" in df.columns:
 # ── Greeting + insight (reference-style briefing header) ─────────────────────
 _bits = []
 if action_needed:
-    _bits.append(f'<b style="color:#D14D00;">{action_needed} lead(s) need your action</b>')
+    _bits.append(f'<b style="color:#FF7D2B;">{action_needed} lead(s) need your action</b>')
 if fu_week:
     _bits.append(f"{fu_week} follow-up(s) this week")
 if pending_tasks:
     _bits.append(f"{pending_tasks} pending task(s)")
 greeting_header(get_display_name() or "there",
-                " — ".join(_bits) if _bits else "All clear today. 🎉")
+                " — ".join(_bits) if _bits else "All clear today. 🎉", dark=True)
 
 # Personal notification panel — what's assigned to whoever is logged in
 render_panel(get_display_name())
 
 # ── Metric cards ──────────────────────────────────────────────────────────────
+# Bright variants — Home renders on a dark background
 _CARDS = [
-    ("#D92D20", action_needed,   "Leads — action needed"),
-    ("#B54708", designs_to_send, "Designs to send"),
-    ("#185FA5", fu_week,         "Follow-ups this week"),
-    ("#C2410C", pending_tasks,   "Pending tasks"),
+    ("#FF6B6B", action_needed,   "Leads — action needed"),
+    ("#F5B84A", designs_to_send, "Designs to send"),
+    ("#6FB7F2", fu_week,         "Follow-ups this week"),
+    ("#FF8C5A", pending_tasks,   "Pending tasks"),
 ]
 st.markdown(
     '<div class="atk-stats">'

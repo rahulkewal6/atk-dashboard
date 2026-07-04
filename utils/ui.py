@@ -18,17 +18,19 @@ def uae_now():
     return datetime.utcnow() + timedelta(hours=4)
 
 
-def greeting_header(name, insight_html=""):
+def greeting_header(name, insight_html="", dark=False):
     """Reference-style page header: date · greeting · one-line insight."""
     now = uae_now()
     h = now.hour
     word = "Good morning" if h < 12 else ("Good afternoon" if h < 17 else "Good evening")
     date_str = now.strftime("%A, %B %-d").upper()
+    title_c  = "#FFFFFF" if dark else "#16181D"
+    sub_c    = "#A8ADB6" if dark else "#5C626B"
     st.markdown(
         f'<div style="margin:0 0 14px;">'
         f'<div style="font-size:0.72rem;letter-spacing:0.08em;color:#8A8F98;">{date_str}</div>'
-        f'<div style="font-size:1.45rem;font-weight:700;color:#16181D;margin:2px 0;">{word}, {name}.</div>'
-        + (f'<div style="font-size:0.9rem;color:#5C626B;">{insight_html}</div>' if insight_html else "")
+        f'<div style="font-size:1.45rem;font-weight:700;color:{title_c};margin:2px 0;">{word}, {name}.</div>'
+        + (f'<div style="font-size:0.9rem;color:{sub_c};">{insight_html}</div>' if insight_html else "")
         + "</div>",
         unsafe_allow_html=True,
     )

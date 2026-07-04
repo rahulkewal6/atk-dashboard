@@ -159,19 +159,25 @@ def inject_css():
         .st-key-stat_won button:hover           { background: #EAF3DE !important; }
         .st-key-stat_quote_client button:hover  { background: #E6F1FB !important; }
 
-        /* Compact lead rows (containers keyed lead_*) */
-        [class*="st-key-lead_"] {
+        /* Compact rows (containers keyed lead_* / task_* / furow_*) */
+        [class*="st-key-lead_"], [class*="st-key-task_"], [class*="st-key-furow_"] {
             padding: 6px 14px !important;
         }
-        [class*="st-key-lead_"] [data-testid="stVerticalBlock"] {
+        [class*="st-key-lead_"] [data-testid="stVerticalBlock"],
+        [class*="st-key-task_"] [data-testid="stVerticalBlock"],
+        [class*="st-key-furow_"] [data-testid="stVerticalBlock"] {
             gap: 0.3rem !important;
         }
-        [class*="st-key-lead_"] [data-testid="stExpander"] {
+        [class*="st-key-lead_"] [data-testid="stExpander"],
+        [class*="st-key-task_"] [data-testid="stExpander"],
+        [class*="st-key-furow_"] [data-testid="stExpander"] {
             border: none !important;
             background: transparent;
             margin: 0;
         }
-        [class*="st-key-lead_"] [data-testid="stExpander"] summary {
+        [class*="st-key-lead_"] [data-testid="stExpander"] summary,
+        [class*="st-key-task_"] [data-testid="stExpander"] summary,
+        [class*="st-key-furow_"] [data-testid="stExpander"] summary {
             padding: 2px 0 !important;
             font-size: 0.78rem;
             color: #8A8F98;

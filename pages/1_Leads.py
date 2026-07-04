@@ -27,10 +27,11 @@ def _initials(company: str) -> str:
     return (words[0][0] + (words[1][0] if len(words) > 1 else "")).upper() if words else "?"
 
 
-def _lead_row(lead_no, company, exhibition, source, stage, value) -> str:
+def _lead_row(lead_no, company, exhibition, source, stage, value, added="") -> str:
     """Compact reference-style lead row: # · avatar · name/meta · pill · value."""
     s = TIER_STYLE[_tier(stage)]
-    meta = "  ·  ".join([m for m in [exhibition, source] if m])
+    added_txt = f"Added {added}" if str(added).strip() else ""
+    meta = "  ·  ".join([m for m in [exhibition, source, added_txt] if m])
     value_html = (
         f'<span style="font-size:0.8rem;color:#374151;font-variant-numeric:tabular-nums;'
         f'white-space:nowrap;">AED {value}</span>' if str(value).strip() else ""
@@ -180,7 +181,8 @@ for idx, row in filtered.iterrows():
             st.markdown(
                 _lead_row(idx + 1, company, exhibition,
                           str(row.get("Source", "") or ""), stage,
-                          str(row.get("Client Quote (AED)", "") or "")),
+                          str(row.get("Client Quote (AED)", "") or ""),
+                          added=str(row.get("Date Added", "") or "")),
                 unsafe_allow_html=True,
             )
         with hr:

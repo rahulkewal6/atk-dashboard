@@ -9,7 +9,7 @@ from utils.constants import TASK_PRIORITIES, TASK_STATUSES, USERS
 from utils.branding import inject_css, show_logo
 from utils.auth import require_login, show_user_bar, can_modify, get_display_name
 from utils.notify import notify_task_assigned
-from utils.ui import time_select
+from utils.ui import time_select, pipeline_bars
 from utils.timeutil import time_with_ist
 
 inject_css()
@@ -92,32 +92,44 @@ with st.expander("➕ Add New Task"):
 st.markdown("---")
 
 # ── Task list ─────────────────────────────────────────────────────────────────
-view = st.radio(
-    "View", ["🕐 Active", "✅ Completed", "All"],
-    horizontal=True, label_visibility="collapsed",
-)
-filter_user = st.selectbox("Filter by person", ["All"] + USERS)
+df_all = get_tasks_df()
 
-df = get_tasks_df()
-
-if df.empty:
+if df_all.empty:
     st.info("No tasks yet. Add one above.")
     st.stop()
 
-# Apply filters
+# Status overview bars (same language as the Leads pipeline bars)
+_TASK_STYLE = {
+    "Pending":     {"color": "#B54708", "bg": "#FAEEDA", "label": "Pending"},
+    "In Progress": {"color": "#185FA5", "bg": "#E6F1FB", "label": "In progress"},
+    "Done":        {"color": "#3B6D11", "bg": "#EAF3DE", "label": "Done"},
+}
+if "Status" in df_all.columns:
+    _tcounts = {s: int((df_all["Status"] == s).sum()) for s in _TASK_STYLE}
+    pipeline_bars(_tcounts, _TASK_STYLE, title="Tasks by status")
+
+vc1, vc2 = st.columns([3, 1.4])
+with vc1:
+    view = st.pills("View", ["Active", "Completed", "All"],
+                    selection_mode="single", default="Active",
+                    label_visibility="collapsed") or "Active"
+with vc2:
+    filter_user = st.selectbox("Person", ["All"] + USERS, label_visibility="collapsed")
+
+df = df_all
 if filter_user != "All" and "Assigned To" in df.columns:
     df = df[df["Assigned To"] == filter_user]
 if "Status" in df.columns:
-    if view == "🕐 Active":
+    if view == "Active":
         df = df[df["Status"].isin(["Pending", "In Progress"])]
-    elif view == "✅ Completed":
+    elif view == "Completed":
         df = df[df["Status"] == "Done"]
 
 if df.empty:
     st.info("No tasks in this view.")
     st.stop()
 
-is_completed_view = (view == "✅ Completed")
+is_completed_view = (view == "Completed")
 
 # Sort: completed view → most recently completed first; otherwise Pending first
 df = df.copy()
@@ -129,10 +141,43 @@ elif "Status" in df.columns:
     df["_sort"] = df["Status"].map(order).fillna(3)
     df = df.sort_values("_sort").drop(columns=["_sort"])
 
-st.markdown(f"**{len(df)} task(s)**")
+st.caption(f"{len(df)} task(s)")
 
-_PRIORITY_COLOR = {"High": "🔴", "Medium": "🟡", "Low": "⚪"}
-_STATUS_COLOR   = {"Pending": "🕐", "In Progress": "🔄", "Done": "✅"}
+_PRIO_STYLE = {
+    "High":   ("#A32D2D", "#FCEBEB"),
+    "Medium": ("#854F0B", "#FAEEDA"),
+    "Low":    ("#5F5E5A", "#F1EFE8"),
+}
+
+
+def _initials(name: str) -> str:
+    words = [w for w in str(name).split() if w]
+    return (words[0][0] + (words[1][0] if len(words) > 1 else "")).upper() if words else "?"
+
+
+def _task_row(title, assigned, priority, status, due_display, src_co, done_line) -> str:
+    s = _TASK_STYLE.get(status, _TASK_STYLE["Pending"])
+    p = _PRIO_STYLE.get(priority, _PRIO_STYLE["Medium"])
+    title_style = "text-decoration:line-through;color:#9AA0A6;" if status == "Done" else "color:#16181D;"
+    meta_bits = [f"👤 {assigned or '—'}", f"📅 {due_display}"]
+    if src_co:
+        meta_bits.append(str(src_co))
+    if done_line:
+        meta_bits.append(done_line)
+    return (
+        f'<div style="display:flex;align-items:center;gap:12px;padding:2px 0;">'
+        f'<span style="width:34px;height:34px;border-radius:9px;background:{s["bg"]};color:{s["color"]};'
+        f'display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;'
+        f'flex:none;">{_initials(assigned)}</span>'
+        f'<div style="flex:1;min-width:0;">'
+        f'<div style="font-size:0.93rem;font-weight:600;{title_style}">{title}</div>'
+        f'<div style="font-size:0.74rem;color:#8A8F98;">{"  ·  ".join(meta_bits)}</div></div>'
+        f'<span class="atk-pill" style="background:{p[1]};color:{p[0]};border:1px solid {p[0]}40;">{priority}</span>'
+        f'<span class="atk-pill" style="background:{s["bg"]};color:{s["color"]};'
+        f'border:1px solid {s["color"]}40;">● {s["label"]}</span>'
+        f'</div>'
+    )
+
 
 for idx, row in df.iterrows():
     title      = row.get("Title", "—")
@@ -148,32 +193,24 @@ for idx, row in df.iterrows():
     comp_by    = str(row.get("Completed By", "") or "")
     comp_date  = str(row.get("Completed Date", "") or "")
 
-    p_icon = _PRIORITY_COLOR.get(priority, "⚪")
-    s_icon = _STATUS_COLOR.get(status, "🕐")
     if str(due_time).strip():
         due_display = f"{due} · {time_with_ist(due_time)}".strip(" ·")
     else:
         due_display = due or "—"
 
-    with st.container(border=True):
+    done_line = ""
+    if status == "Done" and (comp_by or comp_date):
+        done_line = "✅ Completed" + (f" by {comp_by}" if comp_by else "") + (f" on {comp_date}" if comp_date else "")
+
+    with st.container(border=True, key=f"task_{idx}"):
         tc, mc = st.columns([8, 1])
         with tc:
-            meta = f"{p_icon} {priority}  ·  👤 {assigned or '—'}  ·  📅 {due_display}"
-            if src_co:
-                meta += f"  ·  {src_co}"
-            st.markdown(f"**{s_icon}  {title}**")
-            st.caption(meta)
+            st.markdown(_task_row(title, assigned, priority, status, due_display, src_co, done_line),
+                        unsafe_allow_html=True)
             if notes:
                 st.caption(f"📝 {notes}")
             if source != "Manual":
-                st.caption(f"From: {source} follow-up")
-            if status == "Done" and (comp_by or comp_date):
-                done_line = "✅ Completed"
-                if comp_by:
-                    done_line += f" by {comp_by}"
-                if comp_date:
-                    done_line += f" on {comp_date}"
-                st.caption(done_line)
+                st.caption(f"From: {source}")
         with mc:
             with st.popover("⋮", use_container_width=True):
                 st.caption("Status")
