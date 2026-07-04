@@ -195,6 +195,28 @@ def inject_css():
             border-color: #FF6600 !important;
         }
 
+        /* Clickable status pills (popover triggers styled as pills) */
+        [class*="st-key-spill"] [data-testid="stPopover"] > div > button {
+            border-radius: 999px !important;
+            font-size: 0.74rem !important;
+            font-weight: 600 !important;
+            padding: 2px 12px !important;
+            min-height: 1.7rem !important;
+            line-height: 1.2 !important;
+        }
+        [class*="st-key-spillP_"] [data-testid="stPopover"] > div > button {
+            background: #FAEEDA !important; color: #854F0B !important;
+            border: 1px solid #854F0B40 !important;
+        }
+        [class*="st-key-spillI_"] [data-testid="stPopover"] > div > button {
+            background: #E6F1FB !important; color: #185FA5 !important;
+            border: 1px solid #185FA540 !important;
+        }
+        [class*="st-key-spillD_"] [data-testid="stPopover"] > div > button {
+            background: #EAF3DE !important; color: #3B6D11 !important;
+            border: 1px solid #3B6D1140 !important;
+        }
+
         /* Status summary tiles */
         .atk-stats { display: flex; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
         .atk-stat {

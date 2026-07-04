@@ -173,8 +173,6 @@ def _task_row(title, assigned, priority, status, due_display, src_co, done_line)
         f'<div style="font-size:0.93rem;font-weight:600;{title_style}">{title}</div>'
         f'<div style="font-size:0.74rem;color:#8A8F98;">{"  ·  ".join(meta_bits)}</div></div>'
         f'<span class="atk-pill" style="background:{p[1]};color:{p[0]};border:1px solid {p[0]}40;">{priority}</span>'
-        f'<span class="atk-pill" style="background:{s["bg"]};color:{s["color"]};'
-        f'border:1px solid {s["color"]}40;">● {s["label"]}</span>'
         f'</div>'
     )
 
@@ -202,8 +200,9 @@ for idx, row in df.iterrows():
     if status == "Done" and (comp_by or comp_date):
         done_line = "✅ Completed" + (f" by {comp_by}" if comp_by else "") + (f" on {comp_date}" if comp_date else "")
 
+    _skey = {"Pending": "P", "In Progress": "I", "Done": "D"}.get(status, "P")
     with st.container(border=True, key=f"task_{idx}"):
-        tc, mc = st.columns([8, 1])
+        tc, sc_, mc = st.columns([6.4, 1.5, 0.7])
         with tc:
             st.markdown(_task_row(title, assigned, priority, status, due_display, src_co, done_line),
                         unsafe_allow_html=True)
@@ -211,30 +210,32 @@ for idx, row in df.iterrows():
                 st.caption(f"📝 {notes}")
             if source != "Manual":
                 st.caption(f"From: {source}")
+        with sc_:
+            with st.container(key=f"spill{_skey}_task{idx}"):
+                with st.popover(f"● {_TASK_STYLE.get(status, _TASK_STYLE['Pending'])['label']}",
+                                use_container_width=True):
+                    st.caption("Set status")
+                    for s_opt in TASK_STATUSES:
+                        if s_opt == status:
+                            continue
+                        so = _TASK_STYLE.get(s_opt, _TASK_STYLE["Pending"])
+                        if st.button(f"● {so['label']}", key=f"setst_{idx}_{s_opt}",
+                                     use_container_width=True):
+                            if s_opt == "Done":
+                                update_task_fields(idx, {
+                                    "Status": "Done",
+                                    "Completed By": get_display_name(),
+                                    "Completed Date": date.today().strftime("%d-%b-%Y"),
+                                })
+                            else:
+                                update_task_fields(idx, {
+                                    "Status": s_opt,
+                                    "Completed By": "",
+                                    "Completed Date": "",
+                                })
+                            st.rerun()
         with mc:
             with st.popover("⋮", use_container_width=True):
-                st.caption("Status")
-                new_status = st.selectbox(
-                    "Status", TASK_STATUSES,
-                    index=TASK_STATUSES.index(status) if status in TASK_STATUSES else 0,
-                    key=f"taskstatus_{idx}", label_visibility="collapsed",
-                )
-                if st.button("Update status", key=f"taskstatusbtn_{idx}", use_container_width=True):
-                    if new_status == "Done":
-                        update_task_fields(idx, {
-                            "Status": "Done",
-                            "Completed By": get_display_name(),
-                            "Completed Date": date.today().strftime("%d-%b-%Y"),
-                        })
-                    else:
-                        # reopened — clear completion record
-                        update_task_fields(idx, {
-                            "Status": new_status,
-                            "Completed By": "",
-                            "Completed Date": "",
-                        })
-                    st.rerun()
-
                 if can_modify(created_by):
                     st.divider()
                     with st.form(f"edit_task_{idx}"):

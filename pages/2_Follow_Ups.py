@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from utils.sheets import (
     get_followups_df, add_followup, update_followup_status,
     update_followup_fields, delete_followup,
@@ -178,26 +178,49 @@ for idx, row in df.iterrows():
 
     icon = "🔴" if is_overdue else ("✅" if status == "Done" else "📅")
 
-    with st.container(border=True):
-        lc, mc = st.columns([8, 1])
+    _skey = "D" if status == "Done" else "P"
+    with st.container(border=True, key=f"furow_{idx}"):
+        lc, sc_, mc = st.columns([6.4, 1.5, 0.7])
         with lc:
             st.markdown(f"**{icon}  {company}**" + (f"  ·  {exh}" if exh else ""))
-            st.caption(f"📅 {when_display}  ·  👤 {assigned}  ·  Status: **{status}**")
+            st.caption(f"📅 {when_display}  ·  👤 {assigned}")
             if stage:
                 st.caption(f"Stage when added: {stage}")
             if notes:
                 st.caption(f"📝 {notes}")
+        with sc_:
+            with st.container(key=f"spill{_skey}_fu{idx}"):
+                with st.popover(f"● {status}", use_container_width=True):
+                    if status != "Done":
+                        if st.button("✓ Mark done", key=f"done_{idx}", type="primary",
+                                     use_container_width=True):
+                            update_followup_status(idx, "Done")
+                            st.rerun()
+                        st.caption("Or postpone")
+                        try:
+                            _base = pd.to_datetime(fu_date, dayfirst=True).date()
+                        except Exception:
+                            _base = today
+                        _base = max(_base, today)
+                        pp1, pp2 = st.columns(2)
+                        if pp1.button("+1 day", key=f"pp1_{idx}", use_container_width=True):
+                            update_followup_fields(idx, {
+                                "Follow-up Date": (_base + timedelta(days=1)).strftime("%d-%b-%Y"),
+                                "Reminder Sent": "",
+                            })
+                            st.rerun()
+                        if pp2.button("+1 week", key=f"pp7_{idx}", use_container_width=True):
+                            update_followup_fields(idx, {
+                                "Follow-up Date": (_base + timedelta(days=7)).strftime("%d-%b-%Y"),
+                                "Reminder Sent": "",
+                            })
+                            st.rerun()
+                    else:
+                        if st.button("↩ Reopen", key=f"reopen_{idx}", use_container_width=True):
+                            update_followup_status(idx, "Pending")
+                            st.rerun()
         with mc:
             with st.popover("⋮", use_container_width=True):
-                if status != "Done":
-                    if st.button("✓ Mark Done", key=f"done_{idx}", type="primary", use_container_width=True):
-                        update_followup_status(idx, "Done")
-                        st.rerun()
-                else:
-                    if st.button("↩ Reopen", key=f"reopen_{idx}", use_container_width=True):
-                        update_followup_status(idx, "Pending")
-                        st.rerun()
-
                 if can_modify(created_by):
                     st.divider()
                     with st.form(f"edit_fu_{idx}"):
