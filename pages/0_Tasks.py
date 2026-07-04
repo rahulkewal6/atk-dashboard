@@ -155,24 +155,37 @@ def _initials(name: str) -> str:
     return (words[0][0] + (words[1][0] if len(words) > 1 else "")).upper() if words else "?"
 
 
-def _task_row(title, assigned, priority, status, due_display, src_co, done_line) -> str:
+_TRUNC = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+
+
+def _task_row(title, assigned, priority, status, due_display, src_co, done_line,
+              notes="", source="Manual") -> str:
     s = _TASK_STYLE.get(status, _TASK_STYLE["Pending"])
     p = _PRIO_STYLE.get(priority, _PRIO_STYLE["Medium"])
     title_style = "text-decoration:line-through;color:#9AA0A6;" if status == "Done" else "color:#16181D;"
     meta_bits = [f"👤 {assigned or '—'}", f"📅 {due_display}"]
     if src_co:
         meta_bits.append(str(src_co))
+    if source and source != "Manual":
+        meta_bits.append(f"via {source}")
     if done_line:
         meta_bits.append(done_line)
+    notes_html = ""
+    if str(notes).strip():
+        notes_html = (
+            f'<div style="font-size:0.74rem;color:#9AA0A6;{_TRUNC}">📝 {notes}</div>'
+        )
     return (
         f'<div style="display:flex;align-items:center;gap:12px;padding:2px 0;">'
         f'<span style="width:34px;height:34px;border-radius:9px;background:{s["bg"]};color:{s["color"]};'
         f'display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:700;'
         f'flex:none;">{_initials(assigned)}</span>'
         f'<div style="flex:1;min-width:0;">'
-        f'<div style="font-size:0.93rem;font-weight:600;{title_style}">{title}</div>'
-        f'<div style="font-size:0.74rem;color:#8A8F98;">{"  ·  ".join(meta_bits)}</div></div>'
-        f'<span class="atk-pill" style="background:{p[1]};color:{p[0]};border:1px solid {p[0]}40;">{priority}</span>'
+        f'<div style="font-size:0.93rem;font-weight:600;{title_style}{_TRUNC}" title="{title}">{title}</div>'
+        f'<div style="font-size:0.74rem;color:#8A8F98;{_TRUNC}">{"  ·  ".join(meta_bits)}</div>'
+        f'{notes_html}</div>'
+        f'<span class="atk-pill" style="background:{p[1]};color:{p[0]};border:1px solid {p[0]}40;'
+        f'flex:none;">{priority}</span>'
         f'</div>'
     )
 
@@ -204,12 +217,9 @@ for idx, row in df.iterrows():
     with st.container(border=True, key=f"task_{idx}"):
         tc, sc_, mc = st.columns([6.4, 1.5, 0.7])
         with tc:
-            st.markdown(_task_row(title, assigned, priority, status, due_display, src_co, done_line),
+            st.markdown(_task_row(title, assigned, priority, status, due_display, src_co,
+                                  done_line, notes=notes, source=source),
                         unsafe_allow_html=True)
-            if notes:
-                st.caption(f"📝 {notes}")
-            if source != "Manual":
-                st.caption(f"From: {source}")
         with sc_:
             with st.container(key=f"spill{_skey}_task{idx}"):
                 with st.popover(f"● {_TASK_STYLE.get(status, _TASK_STYLE['Pending'])['label']}",

@@ -182,12 +182,26 @@ for idx, row in df.iterrows():
     with st.container(border=True, key=f"furow_{idx}"):
         lc, sc_, mc = st.columns([6.4, 1.5, 0.7])
         with lc:
-            st.markdown(f"**{icon}  {company}**" + (f"  ·  {exh}" if exh else ""))
-            st.caption(f"📅 {when_display}  ·  👤 {assigned}")
+            _meta = [f"📅 {when_display}", f"👤 {assigned}"]
             if stage:
-                st.caption(f"Stage when added: {stage}")
-            if notes:
-                st.caption(f"📝 {notes}")
+                _meta.append(f"Stage: {stage}")
+            _notes_html = ""
+            if str(notes).strip():
+                _notes_html = (
+                    f'<div style="font-size:0.74rem;color:#9AA0A6;white-space:nowrap;'
+                    f'overflow:hidden;text-overflow:ellipsis;">📝 {notes}</div>'
+                )
+            st.markdown(
+                f'<div style="min-width:0;">'
+                f'<div style="font-size:0.93rem;font-weight:600;color:#16181D;white-space:nowrap;'
+                f'overflow:hidden;text-overflow:ellipsis;">{icon}  {company}'
+                + (f'  <span style="color:#8A8F98;font-weight:500;">· {exh}</span>' if exh else "")
+                + f'</div>'
+                f'<div style="font-size:0.74rem;color:#8A8F98;white-space:nowrap;overflow:hidden;'
+                f'text-overflow:ellipsis;">{"  ·  ".join(_meta)}</div>'
+                f'{_notes_html}</div>',
+                unsafe_allow_html=True,
+            )
         with sc_:
             with st.container(key=f"spill{_skey}_fu{idx}"):
                 with st.popover(f"● {status}", use_container_width=True):

@@ -195,6 +195,17 @@ def inject_css():
             border-color: #FF6600 !important;
         }
 
+        /* Row columns: vertically center content (text · pills · menus) */
+        [class*="st-key-lead_"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-task_"] [data-testid="stHorizontalBlock"],
+        [class*="st-key-furow_"] [data-testid="stHorizontalBlock"] {
+            align-items: center !important;
+        }
+        [class*="st-key-task_"] [data-testid="stMarkdownContainer"] p,
+        [class*="st-key-furow_"] [data-testid="stMarkdownContainer"] p {
+            margin-bottom: 0 !important;
+        }
+
         /* Clickable status pills (popover triggers styled as pills) */
         [class*="st-key-spill"] [data-testid="stPopover"] > div > button {
             border-radius: 999px !important;
