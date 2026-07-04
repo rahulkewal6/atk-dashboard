@@ -10,23 +10,57 @@ def _get_users() -> dict:
 
 
 def _show_login():
-    """Render the branded login screen."""
+    """Render the branded login screen — dark, with the company logo centered."""
+    import os
     from utils.branding import inject_css
     inject_css()
 
+    # Login-only dark skin (this CSS renders only while signed out)
+    st.markdown(
+        """
+        <style>
+        [data-testid="stAppViewContainer"] { background: #0D0E10 !important; }
+        [data-testid="stAppViewContainer"] label p { color: #D6D9DE !important; }
+        [data-testid="stForm"] {
+            background: #16181D !important;
+            border: 1px solid #26282E !important;
+            border-radius: 14px !important;
+            padding: 22px !important;
+        }
+        [data-testid="stTextInput"] > div > div {
+            background: #22242B !important;
+            border-color: #33363D !important;
+        }
+        [data-testid="stTextInput"] input { color: #FFFFFF !important; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    _logo = os.path.join(os.path.dirname(__file__), "..", "assets", "logo.png")
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            <div style='text-align:center; margin-bottom:24px;'>
-                <span style='color:#FF6600; font-size:2rem; font-weight:800;'>ATK</span>
-                <span style='color:#FFFFFF; font-size:2rem; font-weight:400;'> Exhibitions</span><br>
-                <span style='color:#888888; font-size:0.95rem;'>Sales Dashboard — Sign In</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        if os.path.exists(_logo):
+            l1, l2, l3 = st.columns([1, 2, 1])
+            with l2:
+                st.image(_logo, use_container_width=True)
+            st.markdown(
+                "<div style='text-align:center; color:#8A8F98; font-size:0.95rem; "
+                "margin:6px 0 20px;'>Sales Dashboard — Sign In</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                """
+                <div style='text-align:center; margin-bottom:24px;'>
+                    <span style='color:#FF6600; font-size:2rem; font-weight:800;'>ATK</span>
+                    <span style='color:#FFFFFF; font-size:2rem; font-weight:400;'> Exhibitions</span><br>
+                    <span style='color:#8A8F98; font-size:0.95rem;'>Sales Dashboard — Sign In</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         with st.form("login_form"):
             username = st.text_input("Username", placeholder="e.g. rahul")
