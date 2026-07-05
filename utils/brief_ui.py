@@ -157,9 +157,13 @@ def render_brief_composer(prefill):
     st.date_input("First concept needed by", key="b_deadline")
 
     # ── Attachments ──────────────────────────────────────────────────────────
-    st.markdown("##### Attachments")
-    files = st.file_uploader("Floor plan, logo, brand guidelines, reference images/PDFs — any type, multiple",
-                             accept_multiple_files=True, key="b_files")
+    st.markdown("##### Attachments — these files go to Imran")
+    files = st.file_uploader(
+        "Floor plan, logo, brand guidelines, reference images — attach as many as you need",
+        type=["pdf", "png", "jpg", "jpeg", "webp", "gif", "svg",
+              "ai", "eps", "zip", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "dwg"],
+        accept_multiple_files=True, key="b_files",
+    )
     files = files or []
     raw_total = sum(len(f.getvalue()) for f in files)
     if files:
