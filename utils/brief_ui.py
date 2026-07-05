@@ -8,7 +8,7 @@ from utils.constants import (
 )
 from utils.design_brief import build_subject, build_brief_html
 from utils.email_util import send_email_with_attachments, compress_image
-from utils.ai_intake import have_openai, transcribe, extract_brief
+from utils.ai_intake import have_openai, transcribe, extract_brief, pdf_text, polish_notes
 from utils.sheets import update_lead_field, log_stage_change, add_design_brief
 from utils.auth import get_display_name
 
@@ -74,6 +74,10 @@ def render_brief_composer(prefill):
     """prefill: {company, exhibition, size, row_number(optional)}"""
     _init(prefill)
 
+    # Apply pending AI-polished notes BEFORE the Notes widget renders
+    if "_polish_pending" in st.session_state:
+        st.session_state["b_notes"] = st.session_state.pop("_polish_pending")
+
     if st.session_state.pop("_brief_sent", None):
         st.success(st.session_state.pop("_brief_sent_msg", "✅ Brief sent."))
 
@@ -84,7 +88,8 @@ def render_brief_composer(prefill):
                                  placeholder="Paste the client email text, or type quick notes…")
             ca, cb = st.columns(2)
             with ca:
-                shot = st.file_uploader("📸 Screenshot of the email", type=["png", "jpg", "jpeg", "webp"],
+                shot = st.file_uploader("📸 Screenshot or PDF of the client's brief",
+                                        type=["png", "jpg", "jpeg", "webp", "pdf"],
                                         key="b_shot")
             with cb:
                 voice = st.audio_input("🎤 Or dictate the brief", key="b_voice")
@@ -94,8 +99,17 @@ def render_brief_composer(prefill):
                     if voice is not None:
                         t = transcribe(voice.getvalue())
                         text = (text + "\n" + t).strip() if text else t
-                    img = shot.getvalue() if shot is not None else None
-                    mime = shot.type if shot is not None else "image/png"
+                    img, mime = None, "image/png"
+                    if shot is not None:
+                        if shot.name.lower().endswith(".pdf"):
+                            pt = pdf_text(shot.getvalue())
+                            if pt:
+                                text = (text + "\n" + pt).strip() if text else pt
+                            else:
+                                st.warning("Couldn't read text from that PDF (it may be a scan) — "
+                                           "try a screenshot of it instead.")
+                        else:
+                            img, mime = shot.getvalue(), shot.type
                     res = extract_brief(text=text, image_bytes=img, image_mime=mime)
                     _apply_ai(res)
                 st.rerun()
@@ -129,6 +143,17 @@ def render_brief_composer(prefill):
     st.text_input("Products to highlight", key="b_products")
     st.text_area("Notes", key="b_notes", height=70,
                  placeholder="e.g. client wants something different from last year")
+    if have_openai() and str(st.session_state.get("b_notes", "")).strip():
+        if st.button("✨ Polish notes wording",
+                     help="Rewrites your notes into crisp professional brief language — "
+                          "check the result in the preview before sending."):
+            with st.spinner("Polishing…"):
+                polished = polish_notes(st.session_state.get("b_notes", ""))
+            if polished:
+                st.session_state["_polish_pending"] = polished
+                st.rerun()
+            else:
+                st.warning("Couldn't polish right now — your notes are unchanged.")
     st.date_input("First concept needed by", key="b_deadline")
 
     # ── Attachments ──────────────────────────────────────────────────────────

@@ -126,6 +126,45 @@ def extract(text="", image_bytes=None, image_mime="image/png"):
     return out
 
 
+def pdf_text(data, max_chars=20000):
+    """Extract text from a (text-based) PDF for AI intake. Returns '' on failure."""
+    try:
+        import io
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(data))
+        out = []
+        for page in reader.pages[:15]:
+            out.append(page.extract_text() or "")
+        return "\n".join(out).strip()[:max_chars]
+    except Exception:
+        return ""
+
+
+def polish_notes(text):
+    """Rewrite rough notes into crisp professional brief wording. Keeps all facts."""
+    client = _client()
+    text = str(text or "").strip()
+    if not client or not text:
+        return ""
+    model = str(st.secrets.get("OPENAI_LEAD_MODEL", "gpt-4o-mini")).strip() or "gpt-4o-mini"
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content":
+                    "You polish rough notes into professional wording for an exhibition-stand "
+                    "design brief sent to a designer. Keep EVERY fact and requirement; add "
+                    "nothing new; no greetings or filler. Return 1-5 short lines, one point "
+                    "per line, no bullets or numbering."},
+                {"role": "user", "content": text},
+            ],
+            temperature=0,
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception:
+        return ""
+
+
 def _empty_brief():
     return {
         "size": "", "location": "", "layout": "", "design_direction": "",
