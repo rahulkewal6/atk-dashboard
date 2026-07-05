@@ -143,17 +143,27 @@ def render_brief_composer(prefill):
     st.text_input("Products to highlight", key="b_products")
     st.text_area("Notes", key="b_notes", height=70,
                  placeholder="e.g. client wants something different from last year")
+    st.caption("Formatting: `**text**` = **bold** · `==text==` = highlighted — shows in the preview and the email.")
     if have_openai() and str(st.session_state.get("b_notes", "")).strip():
-        if st.button("✨ Polish notes wording",
-                     help="Rewrites your notes into crisp professional brief language — "
-                          "check the result in the preview before sending."):
-            with st.spinner("Polishing…"):
-                polished = polish_notes(st.session_state.get("b_notes", ""))
-            if polished:
-                st.session_state["_polish_pending"] = polished
-                st.rerun()
-            else:
-                st.warning("Couldn't polish right now — your notes are unchanged.")
+        pc1, pc2 = st.columns([3, 1.4])
+        with pc1:
+            polish_inst = st.text_input(
+                "Polish instructions (optional)", key="b_polish_inst",
+                placeholder="e.g. make it short bullet points · bold the must-haves",
+                label_visibility="collapsed",
+            )
+        with pc2:
+            if st.button("✨ Polish notes", use_container_width=True,
+                         help="Rewrites your notes into crisp brief language, following your "
+                              "instruction — check the result in the preview before sending."):
+                with st.spinner("Polishing…"):
+                    polished = polish_notes(st.session_state.get("b_notes", ""),
+                                            instruction=polish_inst)
+                if polished:
+                    st.session_state["_polish_pending"] = polished
+                    st.rerun()
+                else:
+                    st.warning("Couldn't polish right now — your notes are unchanged.")
     st.date_input("First concept needed by", key="b_deadline")
 
     # ── Attachments ──────────────────────────────────────────────────────────

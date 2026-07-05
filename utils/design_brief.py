@@ -2,9 +2,19 @@
 Pure builders for the design-brief email — no Streamlit, so the on-screen
 preview and the actually-sent email are byte-for-byte the same.
 """
+import re
 
 _ORANGE = "#FF6600"
 _DARK = "#16181D"
+
+
+def _fmt(s):
+    """Inline formatting: **bold** and ==highlight== → HTML."""
+    s = str(s)
+    s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"==(.+?)==",
+               r'<mark style="background:#FFF3C4;padding:0 2px;border-radius:2px;">\1</mark>', s)
+    return s
 
 
 def build_subject(data):
@@ -17,7 +27,7 @@ def _section(title, lines):
     lines = [l for l in lines if str(l).strip()]
     if not lines:
         return ""
-    lis = "".join(f'<li style="margin:2px 0;">{l}</li>' for l in lines)
+    lis = "".join(f'<li style="margin:2px 0;">{_fmt(l)}</li>' for l in lines)
     return (
         f'<div style="font-size:12px;font-weight:600;color:{_ORANGE};'
         f'text-transform:uppercase;letter-spacing:0.04em;margin:14px 0 4px;">{title}</div>'
@@ -48,7 +58,7 @@ def build_brief_html(data, attachment_names=None):
         f"Layout: {layout}" if layout else "",
     ])
     design = _section("Design direction", [
-        direction,
+        *[l.strip() for l in str(direction).splitlines() if l.strip()],
         (f"Brand colours: {colours}" + (" (logo and guidelines attached)" if colours else "")) if colours else "",
     ])
     func_lines = []
@@ -61,7 +71,7 @@ def build_brief_html(data, attachment_names=None):
     functional = _section("Functional", func_lines)
     av_s       = _section("AV / digital", [av])
     prod_s     = _section("Products to highlight", [products])
-    notes_s    = _section("Notes", [notes])
+    notes_s    = _section("Notes", [l.strip() for l in str(notes).splitlines() if l.strip()])
 
     deadline_html = ""
     if str(deadline).strip():

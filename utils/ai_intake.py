@@ -140,22 +140,29 @@ def pdf_text(data, max_chars=20000):
         return ""
 
 
-def polish_notes(text):
-    """Rewrite rough notes into crisp professional brief wording. Keeps all facts."""
+def polish_notes(text, instruction=""):
+    """Rewrite rough notes into crisp professional brief wording. Keeps all facts.
+    `instruction` lets the user steer the style (e.g. 'make it bullet points')."""
     client = _client()
     text = str(text or "").strip()
     if not client or not text:
         return ""
+    system = (
+        "You polish rough notes into professional wording for an exhibition-stand "
+        "design brief sent to a designer. Keep EVERY fact and requirement; add "
+        "nothing new; no greetings or filler. Default format: short lines, one point "
+        "per line, no bullet symbols or numbering. You may use **bold** to emphasise "
+        "critical requirements. If the user gives a formatting instruction, follow it."
+    )
+    instruction = str(instruction or "").strip()
+    if instruction:
+        system += f"\nUser's instruction for this rewrite: {instruction}"
     model = str(st.secrets.get("OPENAI_LEAD_MODEL", "gpt-4o-mini")).strip() or "gpt-4o-mini"
     try:
         resp = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content":
-                    "You polish rough notes into professional wording for an exhibition-stand "
-                    "design brief sent to a designer. Keep EVERY fact and requirement; add "
-                    "nothing new; no greetings or filler. Return 1-5 short lines, one point "
-                    "per line, no bullets or numbering."},
+                {"role": "system", "content": system},
                 {"role": "user", "content": text},
             ],
             temperature=0,
