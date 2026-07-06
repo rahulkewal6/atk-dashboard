@@ -70,13 +70,46 @@ def _collect():
     }
 
 
+def _polish_controls(field_key, label):
+    """Instruction box + polish button for a text field. Always visible."""
+    if not have_openai():
+        return
+    pc1, pc2 = st.columns([3, 1.4])
+    with pc1:
+        inst = st.text_input(
+            f"polish_inst_{field_key}",
+            key=f"{field_key}_inst",
+            placeholder="Optional instruction — e.g. arrange as short bullet points, bold the must-haves",
+            label_visibility="collapsed",
+        )
+    with pc2:
+        if st.button(f"✨ Polish {label}", key=f"{field_key}_btn", use_container_width=True):
+            src = str(st.session_state.get(field_key, "") or "")
+            if not src.strip():
+                st.warning(f"Type your {label} first, then click Polish.")
+            else:
+                with st.spinner("Polishing…"):
+                    out = polish_notes(src, instruction=inst)
+                if out:
+                    st.session_state[f"_pp_{field_key}"] = out
+                    st.rerun()
+                else:
+                    st.warning("Couldn't polish right now — your text is unchanged.")
+
+
 def render_brief_composer(prefill):
     """prefill: {company, exhibition, size, row_number(optional)}"""
     _init(prefill)
 
-    # Apply pending AI-polished notes BEFORE the Notes widget renders
-    if "_polish_pending" in st.session_state:
-        st.session_state["b_notes"] = st.session_state.pop("_polish_pending")
+    # Apply pending AI-polished text BEFORE the widgets render
+    for _pk, _fk in (("_pp_b_notes", "b_notes"), ("_pp_b_direction", "b_direction")):
+        if _pk in st.session_state:
+            st.session_state[_fk] = st.session_state.pop(_pk)
+
+    # Upload widgets use a rotating key so they fully clear after each send
+    if "_brief_round" not in st.session_state:
+        st.session_state["_brief_round"] = 0
+    _rnd = st.session_state["_brief_round"]
 
     if st.session_state.pop("_brief_sent", None):
         st.success(st.session_state.pop("_brief_sent_msg", "✅ Brief sent."))
@@ -90,9 +123,9 @@ def render_brief_composer(prefill):
             with ca:
                 shot = st.file_uploader("📸 Screenshot or PDF of the client's brief",
                                         type=["png", "jpg", "jpeg", "webp", "pdf"],
-                                        key="b_shot")
+                                        key=f"b_shot_{_rnd}")
             with cb:
-                voice = st.audio_input("🎤 Or dictate the brief", key="b_voice")
+                voice = st.audio_input("🎤 Or dictate the brief", key=f"b_voice_{_rnd}")
             if st.button("✨ Draft brief from this", use_container_width=True):
                 with st.spinner("Reading…"):
                     text = (paste or "").strip()
@@ -129,7 +162,9 @@ def render_brief_composer(prefill):
     with c5:
         st.selectbox("Layout", LAYOUTS, key="b_layout")
 
-    st.text_input("Design direction", key="b_direction", placeholder="Modern, premium, backlit walls…")
+    st.text_area("Design direction", key="b_direction", height=70,
+                 placeholder="Modern, premium, backlit walls…")
+    _polish_controls("b_direction", "direction")
     st.text_input("Brand colours", key="b_colours", placeholder="white, red, blue")
 
     st.selectbox("Meeting room", MEETING_ROOMS, key="b_meeting")
@@ -143,27 +178,9 @@ def render_brief_composer(prefill):
     st.text_input("Products to highlight", key="b_products")
     st.text_area("Notes", key="b_notes", height=70,
                  placeholder="e.g. client wants something different from last year")
-    st.caption("Formatting: `**text**` = **bold** · `==text==` = highlighted — shows in the preview and the email.")
-    if have_openai() and str(st.session_state.get("b_notes", "")).strip():
-        pc1, pc2 = st.columns([3, 1.4])
-        with pc1:
-            polish_inst = st.text_input(
-                "Polish instructions (optional)", key="b_polish_inst",
-                placeholder="e.g. make it short bullet points · bold the must-haves",
-                label_visibility="collapsed",
-            )
-        with pc2:
-            if st.button("✨ Polish notes", use_container_width=True,
-                         help="Rewrites your notes into crisp brief language, following your "
-                              "instruction — check the result in the preview before sending."):
-                with st.spinner("Polishing…"):
-                    polished = polish_notes(st.session_state.get("b_notes", ""),
-                                            instruction=polish_inst)
-                if polished:
-                    st.session_state["_polish_pending"] = polished
-                    st.rerun()
-                else:
-                    st.warning("Couldn't polish right now — your notes are unchanged.")
+    _polish_controls("b_notes", "notes")
+    st.caption("Formatting: `**text**` = **bold** · `==text==` = highlighted — works in Notes "
+               "and Design direction, and shows in the preview and the email.")
     st.date_input("First concept needed by", key="b_deadline")
 
     # ── Attachments ──────────────────────────────────────────────────────────
@@ -172,7 +189,7 @@ def render_brief_composer(prefill):
         "Floor plan, logo, brand guidelines, reference images — attach as many as you need",
         type=["pdf", "png", "jpg", "jpeg", "webp", "gif", "svg",
               "ai", "eps", "zip", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "dwg"],
-        accept_multiple_files=True, key="b_files",
+        accept_multiple_files=True, key=f"b_files_{_rnd}",
     )
     files = files or []
     raw_total = sum(len(f.getvalue()) for f in files)
@@ -226,18 +243,28 @@ def render_brief_composer(prefill):
         add_design_brief({**data, "attachments": ", ".join(att_names),
                           "sent_to": DESIGNER_EMAIL, "sent_by": sender})
         row = prefill.get("row_number")
+        if not row:
+            # No lead pre-selected — match the typed company against the pipeline
+            from utils.sheets import get_pipeline_df
+            pdf_ = get_pipeline_df()
+            if not pdf_.empty and "Company Name" in pdf_.columns:
+                m = pdf_[pdf_["Company Name"].astype(str).str.strip().str.lower()
+                         == data["company"].strip().lower()]
+                if not m.empty:
+                    row = int(m.index[0]) + 1
         if row:
             update_lead_field(row, "Current Stage", "Brief Sent to Designer", sender)
             log_stage_change(data["company"], "Brief Sent to Designer", sender,
                              "Design brief sent to Imran via dashboard")
-        # reset for next time
+        # reset for next time (rotate upload keys so files clear too)
         for k in list(st.session_state.keys()):
             if k.startswith("b_"):
                 st.session_state.pop(k, None)
         st.session_state.pop("brief_loaded_for", None)
+        st.session_state["_brief_round"] = _rnd + 1
         st.session_state["_brief_sent"] = True
         st.session_state["_brief_sent_msg"] = (
             f"✅ Brief sent to Imran for {data['company']}"
-            + (" · lead moved to 'Brief Sent to Designer'" if row else "")
+            + (" · lead moved to 'Brief Sent to Designer' — see the Designs tab" if row else "")
         )
         st.rerun()
