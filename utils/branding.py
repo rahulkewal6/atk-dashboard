@@ -112,11 +112,35 @@ def inject_css():
             background: rgba(255,102,0,0.06) !important;
         }
 
-        /* Inputs → rounded */
+        /* Inputs → clearly outlined so they never blend into a white card */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea,
         [data-testid="stDateInput"] input,
-        [data-testid="stSelectbox"] > div > div { border-radius: 8px !important; }
+        [data-testid="stTimeInput"] input,
+        [data-testid="stNumberInput"] input,
+        [data-testid="stSelectbox"] > div > div,
+        [data-testid="stMultiSelect"] > div > div {
+            border-radius: 8px !important;
+            border: 1px solid #D7DAE0 !important;
+            background: #FFFFFF !important;
+        }
+        [data-testid="stTextInput"] input:focus,
+        [data-testid="stTextArea"] textarea:focus,
+        [data-testid="stDateInput"] input:focus,
+        [data-testid="stTimeInput"] input:focus,
+        [data-testid="stNumberInput"] input:focus {
+            border-color: #FF6600 !important;
+            box-shadow: 0 0 0 1px #FF6600 !important;
+        }
+        [data-testid="stTextInput"] label p,
+        [data-testid="stTextArea"] label p,
+        [data-testid="stDateInput"] label p,
+        [data-testid="stSelectbox"] label p,
+        [data-testid="stMultiSelect"] label p,
+        [data-testid="stNumberInput"] label p {
+            color: #374151 !important;
+            font-weight: 500 !important;
+        }
 
         /* Lead card header */
         .atk-lead-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 0; }
