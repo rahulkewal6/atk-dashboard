@@ -84,14 +84,14 @@ def show_lead_dialog(idx, row):
 
     st.markdown("---")
 
-    # ── Contact info ─────────────────────────────────────────────────────────
-    st.caption("CONTACT INFO")
+    # ── Contact info (click the copy icon on any line) ───────────────────────
+    st.caption("CONTACT INFO — hover a line and click 📋 to copy")
     if cname:
         st.markdown(f"👤 {cname}")
     if email:
-        st.markdown(f"✉️ {email}")
+        st.code(email, language=None)
     if phone:
-        st.markdown(f"📞 {phone}")
+        st.code(phone, language=None)
     if not (cname or email or phone):
         st.caption("No contact details on file yet.")
     added_line = f"{source or '—'}" + (f" · added {added}" if added else "") + (f" by {owner}" if owner else "")
@@ -122,23 +122,9 @@ def show_lead_dialog(idx, row):
     st.caption("NEXT ACTIONS")
     na1, na2 = st.columns(2)
     with na1:
-        if phone:
-            st.link_button("📞 Call now", f"tel:{phone}", use_container_width=True)
-        else:
-            st.button("📞 Call now", disabled=True, use_container_width=True,
-                     help="No phone number on file")
-    with na2:
-        if email:
-            st.link_button("✉️ Email", f"mailto:{email}", use_container_width=True)
-        else:
-            st.button("✉️ Email", disabled=True, use_container_width=True,
-                     help="No email on file")
-
-    na3, na4 = st.columns(2)
-    with na3:
         if st.button("📅 Add to Follow-up", key=f"dlg_showfu_{idx}", use_container_width=True):
             st.session_state[f"dlg_fu_open_{idx}"] = True
-    with na4:
+    with na2:
         if st.button("📋 Add to Task", key=f"dlg_showtask_{idx}", use_container_width=True):
             st.session_state[f"dlg_task_open_{idx}"] = True
 
