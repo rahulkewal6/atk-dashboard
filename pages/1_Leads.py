@@ -64,8 +64,9 @@ greeting_header(get_display_name() or "there", _insight)
 if _due:
     st.sidebar.error(f"🔔 {_due} follow-up{'s' if _due > 1 else ''} due — check Tasks")
 
-# ── Add New Lead ──────────────────────────────────────────────────────────────
-with st.expander("➕ Add New Lead"):
+# ── Add New Lead (dialog, opened from the header button) ─────────────────────
+@st.dialog("➕ Add new lead", width="large")
+def add_lead_dialog():
     with st.form("add_lead_form"):
         col1, col2 = st.columns(2)
         with col1:
@@ -80,7 +81,7 @@ with st.expander("➕ Add New Lead"):
             contact_phone = st.text_input("Contact Phone", placeholder="+971 50 XXX XXXX")
             added_by      = st.selectbox("Added by *", USERS)
         notes = st.text_area("Notes")
-        if st.form_submit_button("Add Lead"):
+        if st.form_submit_button("Add Lead", type="primary", use_container_width=True):
             if not company:
                 st.error("Company name is required.")
             else:
@@ -103,10 +104,25 @@ with st.expander("➕ Add New Lead"):
                     "added_by": added_by, "updated_by": added_by,
                 })
                 if ok:
-                    st.success(f"Lead added: {company}")
+                    st.session_state["_lead_added_msg"] = f"✅ Lead added: {company}"
                     st.rerun()
                 else:
                     st.error("Could not save. Check Google Sheets connection.")
+
+
+_msg = st.session_state.pop("_lead_added_msg", None)
+if _msg:
+    st.success(_msg)
+
+# ── Header bar: search + New lead (reference style) ──────────────────────────
+hs, hb = st.columns([4.2, 1.1])
+with hs:
+    search = st.text_input("Search", key="lead_search",
+                           placeholder="🔍  Search leads, companies, contacts…",
+                           label_visibility="collapsed")
+with hb:
+    if st.button("＋ New lead", type="primary", use_container_width=True):
+        add_lead_dialog()
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 df = get_pipeline_df()
@@ -148,6 +164,17 @@ if "All" not in filter_source and "Source" in filtered.columns:
     filtered = filtered[filtered["Source"].isin(filter_source)]
 if "All" not in filter_stage and "Current Stage" in filtered.columns:
     filtered = filtered[filtered["Current Stage"].isin(filter_stage)]
+
+# Live search across company, contact, email, phone, exhibition, source, notes
+if search and search.strip():
+    q = search.strip().lower()
+    _search_cols = ["Company Name", "Contact Name", "Contact Email", "Contact Phone",
+                    "Exhibition", "Source", "Notes"]
+    mask = pd.Series(False, index=filtered.index)
+    for c in _search_cols:
+        if c in filtered.columns:
+            mask |= filtered[c].astype(str).str.lower().str.contains(q, na=False, regex=False)
+    filtered = filtered[mask]
 
 st.caption(f"{len(filtered)} lead(s)")
 
