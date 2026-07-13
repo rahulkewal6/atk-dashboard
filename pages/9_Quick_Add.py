@@ -48,7 +48,9 @@ with st.container(border=True):
     with ic1:
         audio = st.audio_input("🎤 Record a voice note")
     with ic2:
-        image = st.file_uploader("📸 Email screenshot", type=["png", "jpg", "jpeg", "webp"])
+        images = st.file_uploader("📸 Email screenshot(s) — add one or more",
+                                  type=["png", "jpg", "jpeg", "webp"],
+                                  accept_multiple_files=True)
     extra = st.text_input("✏️ Or type / add extra detail (optional)",
                           placeholder="e.g. Company XYZ, 10x10, GITEX, brief received")
     my_notes = st.text_area("🗒️ Your notes / comments (kept exactly as typed)",
@@ -61,9 +63,8 @@ with st.container(border=True):
                 t = ai_intake.transcribe(audio.getvalue())
                 if t:
                     text = (text + "\n" + t).strip() if text else t
-            img_bytes = image.getvalue() if image is not None else None
-            img_mime = image.type if image is not None else "image/png"
-            result = ai_intake.extract(text=text, image_bytes=img_bytes, image_mime=img_mime)
+            img_list = [(f.getvalue(), f.type) for f in (images or [])]
+            result = ai_intake.extract(text=text, images=img_list)
             # Keep the user's own comments verbatim, ahead of anything the AI found
             mn = my_notes.strip()
             if mn:

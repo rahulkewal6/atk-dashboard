@@ -137,7 +137,7 @@ if "Current Stage" in df.columns:
     counts = {t: int((tiers == t).sum()) for t in _CARD_TIERS}
     pipeline_bars(counts, TIER_STYLE)
 
-# ── Filter chips ──────────────────────────────────────────────────────────────
+# ── Filter chips (by stage) ──────────────────────────────────────────────────
 _TIER_LABELS = {t: TIER_STYLE[t]["label"] for t in _CARD_TIERS + ["lost"]}
 chip = st.pills(
     "Filter", ["All"] + [_TIER_LABELS[t] for t in _CARD_TIERS + ["lost"]],
@@ -145,10 +145,21 @@ chip = st.pills(
 )
 _LABEL_TO_TIER = {v: k for k, v in _TIER_LABELS.items()}
 
+# ── Exhibition view (click an event → see only its leads) ────────────────────
+exh_pick = "All"
+if "Exhibition" in df.columns:
+    _exh_series = df["Exhibition"].astype(str).str.strip()
+    _exh_counts = _exh_series[_exh_series.ne("") & _exh_series.str.lower().ne("nan")].value_counts()
+    _exh_map = {f"{e}  ({n})": e for e, n in _exh_counts.items()}
+    _exh_choice = st.pills(
+        "Exhibition", ["🎪 All events"] + list(_exh_map.keys()),
+        selection_mode="single", default="🎪 All events", label_visibility="collapsed",
+    )
+    if _exh_choice and _exh_choice != "🎪 All events":
+        exh_pick = _exh_map.get(_exh_choice, "All")
+
 with st.expander("More filters"):
-    c2, c3, c4 = st.columns(3)
-    with c2:
-        filter_exhibition = st.multiselect("Exhibition", ["All"] + EXHIBITIONS, default=["All"])
+    c3, c4 = st.columns(2)
     with c3:
         filter_source = st.multiselect("Source", ["All"] + SOURCES, default=["All"])
     with c4:
@@ -158,8 +169,8 @@ filtered = df.copy()
 if chip and chip != "All" and "Current Stage" in filtered.columns:
     want = _LABEL_TO_TIER[chip]
     filtered = filtered[filtered["Current Stage"].map(lambda s: _tier(str(s))) == want]
-if "All" not in filter_exhibition and "Exhibition" in filtered.columns:
-    filtered = filtered[filtered["Exhibition"].isin(filter_exhibition)]
+if exh_pick != "All" and "Exhibition" in filtered.columns:
+    filtered = filtered[filtered["Exhibition"].astype(str).str.strip() == exh_pick]
 if "All" not in filter_source and "Source" in filtered.columns:
     filtered = filtered[filtered["Source"].isin(filter_source)]
 if "All" not in filter_stage and "Current Stage" in filtered.columns:
@@ -176,19 +187,35 @@ if search and search.strip():
             mask |= filtered[c].astype(str).str.lower().str.contains(q, na=False, regex=False)
     filtered = filtered[mask]
 
-st.caption(f"{len(filtered)} lead(s)")
+# ── Count + sort control ─────────────────────────────────────────────────────
+rc1, rc2 = st.columns([3, 1.5])
+rc1.caption(f"{len(filtered)} lead(s)"
+            + (f"  ·  {exh_pick}" if exh_pick != "All" else ""))
+with rc2:
+    sort_by = st.selectbox(
+        "Sort", ["Needs action first", "Newest added", "Oldest added", "Value: high → low"],
+        label_visibility="collapsed", key="lead_sort",
+    )
 
 if filtered.empty:
     st.info("No leads match the current filters.")
     st.stop()
 
-# Sort: action-needed first, then in-progress, then with-client
-_TIER_ORDER = {"red": 0, "design_prog": 1, "quote_prog": 2,
-               "design_client": 3, "quote_client": 4, "won": 5, "lost": 6}
-if "Current Stage" in filtered.columns:
-    filtered = filtered.copy()
-    filtered["_tier_sort"] = filtered["Current Stage"].map(lambda s: _TIER_ORDER.get(_tier(str(s)), 1))
-    filtered = filtered.sort_values("_tier_sort", kind="stable").drop(columns=["_tier_sort"])
+filtered = filtered.copy()
+if sort_by in ("Newest added", "Oldest added"):
+    filtered["_d"] = pd.to_datetime(filtered.get("Date Added", ""),
+                                    format="%d-%b-%Y", errors="coerce")
+    filtered = filtered.sort_values(
+        "_d", ascending=(sort_by == "Oldest added"), na_position="last"
+    ).drop(columns=["_d"])
+elif sort_by == "Value: high → low":
+    filtered["_v"] = pd.to_numeric(filtered.get("Client Quote (AED)", ""), errors="coerce")
+    filtered = filtered.sort_values("_v", ascending=False, na_position="last").drop(columns=["_v"])
+else:
+    _TIER_ORDER = {"red": 0, "design_prog": 1, "quote_prog": 2,
+                   "design_client": 3, "quote_client": 4, "won": 5, "lost": 6}
+    filtered["_t"] = filtered["Current Stage"].map(lambda s: _TIER_ORDER.get(_tier(str(s)), 1))
+    filtered = filtered.sort_values("_t", kind="stable").drop(columns=["_t"])
 
 # ── Lead cards ────────────────────────────────────────────────────────────────
 for idx, row in filtered.iterrows():

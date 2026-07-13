@@ -78,9 +78,10 @@ def _empty():
     }
 
 
-def extract(text="", image_bytes=None, image_mime="image/png"):
+def extract(text="", image_bytes=None, image_mime="image/png", images=None):
     """
-    Send transcript text and/or an image to the model and return a normalized dict.
+    Send transcript text and/or one or more images to the model, return a normalized dict.
+    `images` = list of (bytes, mime); `image_bytes`/`image_mime` kept for backward compatibility.
     """
     client = _client()
     if not client:
@@ -89,11 +90,17 @@ def extract(text="", image_bytes=None, image_mime="image/png"):
     user_content = [{"type": "text", "text": _build_prompt()}]
     if text:
         user_content.append({"type": "text", "text": f"Voice transcript / notes:\n{text}"})
+
+    img_list = list(images or [])
     if image_bytes:
-        b64 = base64.b64encode(image_bytes).decode("utf-8")
+        img_list.append((image_bytes, image_mime))
+    for b, m in img_list:
+        if not b:
+            continue
+        b64 = base64.b64encode(b).decode("utf-8")
         user_content.append({
             "type": "image_url",
-            "image_url": {"url": f"data:{image_mime};base64,{b64}"},
+            "image_url": {"url": f"data:{m or 'image/png'};base64,{b64}"},
         })
 
     # Model is configurable via secrets — default to the cheap, fast, vision-capable one.
