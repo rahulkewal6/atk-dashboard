@@ -59,6 +59,7 @@ Pages must NOT call `st.set_page_config` — it is called once in `app.py`.
 | `pages/1_Leads.py` | 🎯 Leads | Pipeline: 6-tier status cards, inline stage popover, ⋮ delete, lead #, Stand Size |
 | `pages/2_Follow_Ups.py` | 📅 Follow Ups | Follow-ups w/ time; ⋮ edit/delete; appear in Tasks banner when due |
 | `pages/8_Design_Tracker.py` | 🎨 Designs | Briefs pending with the designer; days waiting; chase-task action |
+| `pages/10_Design_Brief.py` | 📐 Design Brief | Compose/preview/send a brief to Imran w/ attachments; polish AI; auto-tracks |
 | `pages/3_Sequences.py` | ✉️ Sequences | Apollo sequences + "who replied" list (opens-per-person not in Apollo API) |
 | `pages/4_Reports.py` | 📊 Reports | Dashboard metrics |
 | `pages/5_Calendar.py` | 🗓️ Calendar | Exhibition event calendar |
@@ -153,6 +154,14 @@ Defined in `utils/constants.py` → `PIPELINE_STAGES`, grouped by `STAGE_TIERS` 
 - `utils/branding.py` — `inject_css()`, `show_logo()` — called on every page
 - `utils/auth.py` — `require_login()`, `show_user_bar()`, `is_admin()`, `get_display_name()`, `can_modify(owner)`
 - `utils/scraper.py` — Jina.ai + AI scraping functions for List Maker
+- `utils/lead_detail.py` — `show_lead_dialog` (st.dialog): contact (copy boxes, no tel/mailto),
+  stage funnel, Add-to-Follow-up/Task, edit/history/delete
+- `utils/design_brief.py` (pure builder), `utils/brief_ui.py` (composer) — brief → Imran
+- `utils/ai_intake.py` — `extract(images=[...])` multi-image, `pdf_text`, `polish_notes(text, instruction)`
+- `utils/ui.py` — `time_select`, `greeting_header(dark=)`, `pipeline_bars`
+- **Streamlit gotchas** (see `PROJECT_LOG.md`): file-uploaders reset via rotating key; can't set a widget's
+  session key after it rendered (stage into a pending key, apply next run); `st-key-*` classes target CSS;
+  st.dialog/pills/audio_input/[theme.sidebar] need streamlit>=1.40; `<a href>` nav logs users out (use switch_page)
 
 ---
 
