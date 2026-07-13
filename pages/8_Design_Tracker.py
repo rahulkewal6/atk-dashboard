@@ -60,22 +60,48 @@ for idx, row in pending.iterrows():
     stage   = str(row.get("Current Stage", ""))
     sent    = _brief_sent_date(company, stage)
     waiting = (today - sent).days if sent else None
-    rows.append((idx, row, company, stage, sent, waiting))
-
-# Sort by longest waiting first (unknown dates last)
-rows.sort(key=lambda r: (r[5] is None, -(r[5] or 0)))
+    exhibition = str(row.get("Exhibition", "") or "")
+    rows.append((idx, row, company, stage, sent, waiting, exhibition))
 
 overdue = sum(1 for r in rows if r[5] is not None and r[5] >= CHASE_DAYS)
 m1, m2 = st.columns(2)
 m1.metric("Briefs with designer", len(rows))
 m2.metric(f"Waiting {CHASE_DAYS}+ days", overdue)
 
+# ── Sort + exhibition filter ─────────────────────────────────────────────────
+sc1, sc2 = st.columns([1.4, 2])
+with sc1:
+    sort_by = st.selectbox("Sort by",
+                           ["Longest waiting", "Newest brief", "Oldest brief"],
+                           label_visibility="collapsed")
+with sc2:
+    _exhs = sorted({r[6] for r in rows if r[6]})
+    exh_opts = ["🎪 All events"] + [f"{e}  ({sum(1 for r in rows if r[6] == e)})" for e in _exhs]
+    _exh_map = {f"{e}  ({sum(1 for r in rows if r[6] == e)})": e for e in _exhs}
+    exh_choice = st.pills("Event", exh_opts, selection_mode="single",
+                          default="🎪 All events", label_visibility="collapsed")
+
+if exh_choice and exh_choice != "🎪 All events":
+    want_exh = _exh_map.get(exh_choice)
+    rows = [r for r in rows if r[6] == want_exh]
+
+# A brief with no logged date sorts last in every mode
+if sort_by == "Longest waiting":
+    rows.sort(key=lambda r: (r[5] is None, -(r[5] or 0)))
+elif sort_by == "Newest brief":
+    rows.sort(key=lambda r: (r[4] is None, -(r[4].toordinal() if r[4] else 0)))
+else:  # Oldest brief
+    rows.sort(key=lambda r: (r[4] is None, r[4].toordinal() if r[4] else 0))
+
 st.markdown("---")
 
 _s = TIER_STYLE["design_prog"]
 
-for idx, row, company, stage, sent, waiting in rows:
-    exhibition = str(row.get("Exhibition", ""))
+if not rows:
+    st.info("No briefs for this event.")
+    st.stop()
+
+for idx, row, company, stage, sent, waiting, exhibition in rows:
     brief_ver  = row.get("Brief Version", "")
 
     with st.container(border=True):
